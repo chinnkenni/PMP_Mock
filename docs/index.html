@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PMP 模拟考试</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818CF8','primary-dark':'#3730A3',cta:'#22C55E','cta-dark':'#16A34A',surface:'#EEF2FF','surface-card':'#FFFFFF',ink:'#312E81','ink-light':'#475569','ink-muted':'#94A3B8',correct:'#16A34A',wrong:'#DC2626','wrong-bg':'#FEF2F2','correct-bg':'#F0FDF4'},fontFamily:{sans:['"Noto Sans SC"','system-ui','sans-serif']}}}}
+</script>
+<style>
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseGlow{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.fade-in{animation:fadeIn .4s ease-out}.pulse-glow{animation:pulseGlow 2s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.fade-in,.pulse-glow{animation:none}}
+.option-btn{transition:all 200ms ease}.option-btn:hover:not(.disabled){transform:translateX(4px)}
+.timer-warning{animation:pulseGlow 1s ease-in-out infinite;color:#DC2626!important}.timer-warning svg{color:#DC2626!important}
+</style>
+</head>
+<body class="bg-surface min-h-screen font-sans text-ink">
+
+<!-- ========== START SCREEN ========== -->
+<div id="startScreen" class="min-h-screen flex items-center justify-center px-4">
+<div class="max-w-lg w-full bg-surface-card rounded-2xl shadow-xl p-8 md:p-12 text-center fade-in">
+  <div class="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+    <svg class="w-10 h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5"/></svg>
+  </div>
+  <h1 class="text-3xl md:text-4xl font-bold text-primary-dark mb-3">PMP 模拟考试</h1>
+  <p class="text-ink-light text-lg mb-2" id="examSubtitle">全部题库</p>
+  <div class="flex items-center justify-center gap-6 text-sm text-ink-muted mb-8">
+    <span class="flex items-center gap-1.5">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      <span id="totalBadge">60</span> 道题
+    </span>
+    <span class="flex items-center gap-1.5">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      约 <span id="timeEstimate">90</span> 分钟
+    </span>
+  </div>
+
+  <!-- Part selector -->
+  <div class="mb-6">
+    <label class="block text-sm font-medium text-ink-light mb-3">选择考试范围</label>
+    <div class="flex flex-col gap-2" id="partSelector">
+      <label class="flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5 cursor-pointer transition-colors hover:bg-primary/10">
+        <input type="radio" name="part" value="all" checked class="accent-primary">
+        <span class="text-sm font-medium">全部题目 (60题)</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Question count -->
+  <div class="mb-8">
+    <label class="block text-sm font-medium text-ink-light mb-3">选择题数</label>
+    <div class="flex items-center justify-center gap-3 flex-wrap">
+      <button onclick="setQCount(10)" class="qcount-btn px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="10">10 题</button>
+      <button onclick="setQCount(20)" class="qcount-btn px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="20">20 题</button>
+      <button onclick="setQCount(30)" class="qcount-btn px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="30">30 题</button>
+      <button onclick="setQCount(0)" class="qcount-btn px-4 py-2 rounded-lg border-2 border-primary text-sm font-medium bg-primary/5 cursor-pointer hover:border-primary/50 transition-colors active" data-count="0">全部</button>
+    </div>
+  </div>
+
+  <!-- Mode buttons -->
+  <div class="mb-8">
+    <label class="block text-sm font-medium text-ink-light mb-3">选择模式</label>
+    <div class="grid grid-cols-3 gap-3">
+      <button onclick="startExam()" class="bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-primary/25 flex flex-col items-center gap-1">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        <span class="text-sm">普通练习</span>
+      </button>
+      <button id="drillBtn" onclick="startDrill()" class="bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/25 flex flex-col items-center gap-1">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        <span class="text-sm">错题专项</span>
+      </button>
+      <button id="mixBtn" onclick="startMix()" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-purple-600/25 flex flex-col items-center gap-1">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+        <span class="text-sm">混合练习</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mistake bank card -->
+  <div id="mistakeCard" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 cursor-pointer hover:bg-amber-100 transition-colors" onclick="showMistakeBook()">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-amber-200 rounded-lg flex items-center justify-center">
+          <svg class="w-5 h-5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        </div>
+        <div class="text-left">
+          <p class="text-sm font-semibold text-amber-800">错题本</p>
+          <p class="text-xs text-amber-600">共 <span id="mistakeCountText">0</span> 道错题待复习</p>
+        </div>
+      </div>
+      <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ========== EXAM SCREEN ========== -->
+<div id="examScreen" class="hidden min-h-screen">
+<header class="sticky top-0 z-50 bg-surface-card/95 backdrop-blur-sm border-b border-primary/10 shadow-sm">
+  <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+    <span class="text-sm font-medium text-ink-light">第 <span id="currentNum" class="text-primary font-bold">1</span> / <span id="totalNum">60</span> 题</span>
+    <div id="timerDisplay" class="flex items-center gap-1.5 text-sm font-mono font-semibold text-primary">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span id="timerText">90:00</span>
+    </div>
+    <button id="topSubmitBtn" onclick="handleTopSubmit()" class="text-sm font-medium text-cta hover:text-cta-dark transition-colors cursor-pointer flex items-center gap-1">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      交卷
+    </button>
+  </div>
+  <div class="h-1 bg-primary/10"><div id="progressBar" class="h-full bg-gradient-to-r from-primary to-primary-light transition-all duration-500 ease-out" style="width:0%"></div></div>
+</header>
+
+<main class="max-w-4xl mx-auto px-4 py-6 md:py-10">
+  <div id="questionArea" class="bg-surface-card rounded-2xl shadow-md p-6 md:p-10 fade-in">
+    <p id="partLabel" class="text-xs text-primary-light font-medium mb-3"></p>
+    <h2 id="questionText" class="text-lg md:text-xl font-medium leading-relaxed mb-8"></h2>
+    <div id="optionsArea" class="space-y-3"></div>
+    <div id="explanationArea" class="hidden mt-6 p-4 rounded-xl bg-primary/5 border border-primary/10">
+      <p id="explanationText" class="text-sm text-ink-light leading-relaxed"></p>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between mt-6">
+    <button id="prevBtn" onclick="prevQuestion()" class="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-primary/20 text-primary font-medium hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>上一题
+    </button>
+    <button id="markBtn" onclick="toggleMark()" class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-yellow-400/40 text-yellow-600 font-medium hover:bg-yellow-50 transition-colors cursor-pointer" title="标记此题">
+      <svg id="markIcon" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+      <span id="markText">标记</span>
+    </button>
+    <button id="nextBtn" onclick="nextQuestion()" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white font-medium hover:bg-primary-dark transition-colors cursor-pointer">
+      下一题<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </button>
+  </div>
+
+  <div class="mt-6 text-center">
+    <button onclick="toggleQuestionMap()" class="text-sm text-primary-light hover:text-primary transition-colors cursor-pointer flex items-center gap-1 mx-auto">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>题目导航
+    </button>
+  </div>
+  <div id="questionMap" class="hidden mt-4 bg-surface-card rounded-2xl shadow-md p-6 fade-in">
+    <div class="flex flex-wrap gap-2" id="questionMapGrid"></div>
+    <div class="flex items-center gap-4 mt-4 text-xs text-ink-muted">
+      <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-primary inline-block"></span>已答</span>
+      <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-yellow-400 inline-block"></span>标记</span>
+      <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-gray-200 inline-block"></span>未答</span>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- ========== RESULT SCREEN ========== -->
+<div id="resultScreen" class="hidden min-h-screen flex items-center justify-center px-4 py-10">
+<div class="max-w-2xl w-full fade-in">
+  <div class="bg-surface-card rounded-2xl shadow-xl p-8 md:p-12 text-center mb-6">
+    <div id="scoreEmoji" class="text-6xl mb-4"></div>
+    <h2 class="text-2xl font-bold text-ink mb-2">考试结果</h2>
+    <div class="my-8">
+      <div class="relative w-40 h-40 mx-auto">
+        <svg class="w-full h-full -rotate-90" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="#E0E7FF" stroke-width="8"/>
+          <circle id="scoreCircle" cx="60" cy="60" r="52" fill="none" stroke="#4F46E5" stroke-width="8" stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73" style="transition:stroke-dashoffset 1.5s ease-out"/>
+        </svg>
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+          <span id="scorePercent" class="text-4xl font-bold text-primary">0%</span>
+          <span class="text-xs text-ink-muted">正确率</span>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-cols-3 gap-4 text-center">
+      <div class="bg-correct-bg rounded-xl p-4"><p id="correctCount" class="text-2xl font-bold text-correct">0</p><p class="text-xs text-ink-muted mt-1">正确</p></div>
+      <div class="bg-wrong-bg rounded-xl p-4"><p id="wrongCount" class="text-2xl font-bold text-wrong">0</p><p class="text-xs text-ink-muted mt-1">错误</p></div>
+      <div class="bg-primary/5 rounded-xl p-4"><p id="unansweredCount" class="text-2xl font-bold text-primary">0</p><p class="text-xs text-ink-muted mt-1">未答</p></div>
+    </div>
+    <div class="mt-6 flex items-center justify-center gap-1 text-sm text-ink-muted">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      用时 <span id="timeUsed">0:00</span>
+    </div>
+  </div>
+  <div class="flex gap-3">
+    <button onclick="reviewExam()" class="flex-1 bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-primary/25">查看解析</button>
+    <button onclick="restartExam()" class="flex-1 border-2 border-primary text-primary font-semibold py-3 rounded-xl hover:bg-primary/5 transition-colors cursor-pointer">重新考试</button>
+  </div>
+</div>
+</div>
+
+<!-- ========== MISTAKE BOOK SCREEN ========== -->
+<div id="mistakeBookScreen" class="hidden min-h-screen">
+<header class="sticky top-0 z-50 bg-surface-card/95 backdrop-blur-sm border-b border-primary/10 shadow-sm">
+  <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+    <button onclick="hideMistakeBook()" class="flex items-center gap-1 text-primary font-medium text-sm cursor-pointer hover:text-primary-dark transition-colors">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      返回
+    </button>
+    <h2 class="text-lg font-bold text-ink">错题本</h2>
+    <button onclick="confirmClearMistakes()" class="text-sm text-wrong font-medium cursor-pointer hover:text-red-700 transition-colors">清空</button>
+  </div>
+</header>
+<main class="max-w-4xl mx-auto px-4 py-6">
+  <div id="mistakeList"></div>
+</main>
+</div>
+
+<!-- ========== CLEAR MISTAKES CONFIRM ========== -->
+<div id="clearConfirmModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm">
+<div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center fade-in">
+  <div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+    <svg class="w-7 h-7 text-wrong" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+  </div>
+  <h3 class="text-xl font-bold text-ink mb-2">清空错题本？</h3>
+  <p class="text-ink-light text-sm mb-6">所有记录的错题将被删除，此操作不可撤销。</p>
+  <div class="flex gap-3">
+    <button onclick="document.getElementById('clearConfirmModal').classList.add('hidden')" class="flex-1 border border-gray-200 text-ink-light font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">取消</button>
+    <button onclick="doClearMistakes()" class="flex-1 bg-wrong text-white font-medium py-2.5 rounded-xl hover:bg-red-700 transition-colors cursor-pointer">确认清空</button>
+  </div>
+</div>
+</div>
+<!-- ========== CONFIRM MODAL ========== -->
+<div id="confirmModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm">
+<div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center fade-in">
+  <div class="w-14 h-14 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+    <svg class="w-7 h-7 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+  </div>
+  <h3 class="text-xl font-bold text-ink mb-2">确认交卷？</h3>
+  <p id="confirmText" class="text-ink-light text-sm mb-6"></p>
+  <div class="flex gap-3">
+    <button onclick="closeModal()" class="flex-1 border border-gray-200 text-ink-light font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">继续答题</button>
+    <button onclick="submitExam()" class="flex-1 bg-cta text-white font-medium py-2.5 rounded-xl hover:bg-cta-dark transition-colors cursor-pointer">确认交卷</button>
+  </div>
+</div>
+</div>
+
+<script>
+// Exam data - generated from md files
+var EXAM_PARTS = [{"title":"一部分：项目管理基础知识","questions":[{"number":1,"text":"项目经理应该？","options":[{"letter":"A","text":"满足与项目有关的任务需求、团队需求和个人需求"},{"letter":"B","text":"负责管理好职能工作和业务单元"},{"letter":"C","text":"与职能经理精诚协作，保证业务运营的高效性"},{"letter":"D","text":"独立开展工作，尽量避免与职能经理、业务分析师、质量保证专家和主题专家的协作"}],"answer":"A","explanation":"项目经理不仅应该完成项目任务，还应该满足项目团队和团队成员的需求。"},{"number":2,"text":"您正在进行一个大型项目，该项目分为以下阶段：可行性、概念性、设计、原型和构建。您希望将过程组与这些不同的阶段一起使用。推荐的方法是什么？","options":[{"letter":"A","text":"为每个阶段分配一个过程组"},{"letter":"B","text":"对每个阶段重复所有五个过程组"},{"letter":"C","text":"跳过几个流程组，因为它们不适用于大型项目"},{"letter":"D","text":"消除阶段结构，并使用其中一个流程组名称重命名每个阶段"}],"answer":"B","explanation":"过程组不应与项目阶段混淆。每个阶段都应该包含所有的过程组。"},{"number":3,"text":"工作绩效数据与工作绩效信息之间的关系是？","options":[{"letter":"A","text":"从工作绩效信息中整理出工作绩效数据"},{"letter":"B","text":"它们是针对项目不同组成部分的，不存在任何相关性"},{"letter":"C","text":"它们是完全一样的，只是叫法不同而已"},{"letter":"D","text":"工作绩效数据是工作绩效信息的基础"}],"answer":"D","explanation":"基于项目计划和工作绩效数据，分析整理出工作绩效信息。"},{"number":4,"text":"以下哪个属于运营的一部分？","options":[{"letter":"A","text":"会计业务"},{"letter":"B","text":"调整现有运营系统"},{"letter":"C","text":"产品更新换代"},{"letter":"D","text":"服务流程再造"}],"answer":"A","explanation":"会计业务通常是不断重复进行的，是运营"},{"number":5,"text":"项目经理在其项目团队的领导中发挥着至关重要的作用。项目经理对项目的参与程度因组织和项目而异。以下哪一项给出了项目中最大程度的参与度？","options":[{"letter":"A","text":"从项目评估到实现商业效益"},{"letter":"B","text":"从需求到交付"},{"letter":"C","text":"从计划到执行"},{"letter":"D","text":"从启动到关闭"}],"answer":"A","explanation":"项目经理的角色可能因组织而异。在一些组织中，项目经理可能会在项目启动前参与评估和分析活动。在一些组织中，项目经理也可能参与与从项目中实现业务利益相关的后续活动。"},{"number":6,"text":"某公司的PMO虽然不直接管控项目，但有权要求项目采用公司特定的项目管理方法论。这是什么类型的PMO？","options":[{"letter":"A","text":"支持型"},{"letter":"B","text":"控制型"},{"letter":"C","text":"指令型"},{"letter":"D","text":"教练型"}],"answer":"B","explanation":"控制型 PMO 有权要求项目服从自己的要求，虽然并不直接管理项目。"},{"number":7,"text":"运营与项目有许多共同点，除了？","options":[{"letter":"A","text":"在各阶段都需要不同的人员或组织参与"},{"letter":"B","text":"都受制于一些约束，包括资源约束"},{"letter":"C","text":"都需要规划、执行和控制"},{"letter":"D","text":"都需要服务于组织的经营或战略目标"}],"answer":"A","explanation":"不符合 PMBOK 指南中对运营和项目的共同点描述。"},{"number":8,"text":"项目阶段组合在一起也被称为项目生命周期，下列有关项目生命周期的说法中，错误的是？","options":[{"letter":"A","text":"所有项目生命周期通常都是一样的"},{"letter":"B","text":"项目风险水平在开始时最高，随着项目的进行而降低"},{"letter":"C","text":"项目相关方影响项目最终特性的能力在开始最高，随着项目的进行而逐步降低"},{"letter":"D","text":"成本与资源配备要求通常在中间阶段达到峰值"}],"answer":"A","explanation":"项目生命周期的确定由组织的需求控制决定，与组织的既定方针、项目管理团队生命周期的选择、行业的通用做法有关。"},{"number":9,"text":"组织过程资产可以分为哪两大类？","options":[{"letter":"A","text":"流程与程序、共享知识库"},{"letter":"B","text":"标准与规范、项目管理信息系统"},{"letter":"C","text":"模板与指南、基础设施"},{"letter":"D","text":"控制程序、控制系统"}],"answer":"A","explanation":"一类是标准化的工作流程和程序(组织内部的)，一类是过去项目积累下来的共享数据库(知识库)。"},{"number":10,"text":"已经为您的项目服务发布了 RFP。项目发起人以时间限制为由，坚持只向少数特定供应商提供 RFP，而不是像贵公司通常那样公开招标。在供应商选择过程中，您了解到项目发起人的妻子是其中一家响应供应商的高管。你怎么办？","options":[{"letter":"A","text":"取消供应商资格"},{"letter":"B","text":"找借口离开"},{"letter":"C","text":"什么都不做"},{"letter":"D","text":"将此潜在利益冲突通知适当的管理层"}],"answer":"D","explanation":"通知适当的管理层存在潜在的利益冲突。一旦他们了解了情况，就可以制定行动计划。PMI的《道德规范》要求项目经理主动向适当的管理层报告利益冲突"},{"number":11,"text":"项目完成后的维护和连续运营对项目至关重要，因此应该？","options":[{"letter":"A","text":"作为项目的一部分"},{"letter":"B","text":"由项目团队来开展"},{"letter":"C","text":"在项目执行过程中加以考虑，但不应看作项目的一部分"},{"letter":"D","text":"作为整个项目中的一个子项目"}],"answer":"C","explanation":"维护和连续运营不是项目的一部分，但需要在项目执行中加以考虑。"},{"number":12,"text":"项目所开发的产品需要与市场上已有的一种产品配合使用，才能发挥最佳功能。项目执行组织通过考察，与某特定品牌的该种产品的供应商签订了合作协议。根据协议，项目执行组织将推荐该品牌产品供项目用户购买。该产品供应商是属于以下哪种项目干系人？","options":[{"letter":"A","text":"卖方"},{"letter":"B","text":"客户"},{"letter":"C","text":"用户"},{"letter":"D","text":"业务伙伴"}],"answer":"D","explanation":"项目执行组织与业务伙伴之间有不属于买卖合同的协议。"},{"number":13,"text":"以下哪一项是项目的一个实例？","options":[{"letter":"A","text":"管理一个公司"},{"letter":"B","text":"批量生产一种新近开发出来的家用电冰箱"},{"letter":"C","text":"为公司运营提供信息技术支持"},{"letter":"D","text":"改进一套现有的业务流程或程序"}],"answer":"D","explanation":"改进现有的业务流程或程序，是流程再造项目。"},{"number":14,"text":"Kelly 是项目管理办公室（PMO）的一员。她的办公室负责 18 个项目的集中协调管理。每个项目都有自己的项目经理。以下哪项通常不是项目管理办公室的责任？","options":[{"letter":"A","text":"制定和管理项目政策"},{"letter":"B","text":"对每个项目及其生产的产品进行详细描述"},{"letter":"C","text":"辅导、指导、培训和监督"},{"letter":"D","text":"管理所辖的所有项目的共享资源"}],"answer":"B","explanation":"PMO 的主要职能是以各种方式支持项目经理。这可能包括制定和管理项目政策、辅导、指导、培训和监督。这也可能包括对项目之间共享的资源的管理。然而，制定每个项目的详细描述将是处理项目的项目经理的责任，而不是项目管理办公室的责任。"},{"number":15,"text":"把项目划分成通常顺序排列的多个阶段，阶段的名称和数量由项目所在组织根据管理与控制的需要确定。这些项目阶段的组合叫做？","options":[{"letter":"A","text":"项目生命周期"},{"letter":"B","text":"产品生命周期"},{"letter":"C","text":"项目运营周期"},{"letter":"D","text":"项目管理生命周期"}],"answer":"A","explanation":"项目生命周期包括通常顺序排列有时又相互交叉的一系列项目阶段。项目生命周期的阶段划分取决于项目所在组织对项目管控的需要。"},{"number":16,"text":"以下哪个说法是错误的？","options":[{"letter":"A","text":"在项目开始时，项目资源被转移到运营中；而随着项目趋于结束，运营资源被转移到项目中"},{"letter":"B","text":"项目和运营都服务于既定的组织战略"},{"letter":"C","text":"项目与运营会在产品生命周期的不同时点交叉"},{"letter":"D","text":"在每个交叉点，可交付成果及知识在项目与运营之间转移，以完成工作交接"}],"answer":"A","explanation":"说反了，应该是在项目开始时，运营资源被转移到项目中；而随着项目趋于结束，项目资源被转移到运营中。"},{"number":17,"text":"您最近接手了一个即将进入执行阶段的项目。为了了解项目，您开始审查项目启动前发生的项目沟通和项目的商业案例。您对商业案例的编排方式不满意，因为它不包含：","options":[{"letter":"A","text":"项目的 BAC 和 ETC"},{"letter":"B","text":"项目 WBS"},{"letter":"C","text":"备选方案的确定"},{"letter":"D","text":"差异分析"}],"answer":"C","explanation":"任何项目的商业案例都包括对情况的分析、建议的解决方案和替代解决方案的确定"},{"number":18,"text":"下列关于过程组和项目阶段的说法，正确的是？","options":[{"letter":"A","text":"过程组不同于项目生命周期的阶段，在一个阶段中可能会执行全部过程组"},{"letter":"B","text":"过程组不同于项目生命周期的阶段，在一个过程组中可能会执行全部阶段"},{"letter":"C","text":"过程组就是项目生命周期的阶段，在一个阶段中可能会执行全部过程组"},{"letter":"D","text":"过程组就是项目生命周期的阶段，在一个过程组中可能会执行全部阶段"}],"answer":"A","explanation":"在规范的项目管理中，不仅每个项目要经过五大过程组，而且每个阶段可能都要经历五大过程组。"},{"number":19,"text":"你最近加入了一个组织，担任项目经理。您已经注意到，项目团队是自组织的，不需要您进行太多监督。因此，你允许团队做出自己的决定并确立自己的目标。以下哪一项代表你的领导风格？","options":[{"letter":"A","text":"魅力型"},{"letter":"B","text":"交易型"},{"letter":"C","text":"放任型"},{"letter":"D","text":"变革型"}],"answer":"C","explanation":"这就是自由放任的领导风格。"},{"number":20,"text":"下列哪项陈述反映了项目的风险程度？","options":[{"letter":"A","text":"项目初始阶段的风险最大"},{"letter":"B","text":"项目初始阶段的风险最小"},{"letter":"C","text":"风险在整个项目期间保持恒定"},{"letter":"D","text":"项目实施过程中的风险最大"}],"answer":"A","explanation":"项目生命周期结构的特征表明：干系人影响力、项目风险与不确定性在项目开始时最大，并在项目的整个生命周期中随时间推移而递减。"},{"number":21,"text":"在组织战略发生变化之后，以下哪个也要发生变化？","options":[{"letter":"A","text":"项目范围"},{"letter":"B","text":"项目集范围"},{"letter":"C","text":"项目组合范围"},{"letter":"D","text":"子项目范围"}],"answer":"C","explanation":"项目组合的范围与组织战略直接相关"},{"number":22,"text":"您正在组织中建立一个 PMO。项目管理办公室不仅需要为项目提供模板和必要的培训，还将确保所有项目符合组织项目管理政策和程序。然而，项目管理办公室不会直接管理组织的项目。您正在建立哪种类型的项目管理办公室？","options":[{"letter":"A","text":"支持型PMO"},{"letter":"B","text":"指令型PMO"},{"letter":"C","text":"超级PMO"},{"letter":"D","text":"控制型PMO"}],"answer":"D","explanation":"这是一个控制 PMO 的例子。控制性 PMO 执行支持性 PMO 的所有任务，并确保合规性。这不是指令型 PMO，因为它不会直接管理项目。“超级 PMO”是一个虚构的术语。"},{"number":23,"text":"您正在管理一个组织流程重新设计项目，该项目需要大量的知识工作来理解流程的当前状态并定义流程的未来状态。由于项目的性质，无法在项目早期详细定义所有项目需求，因为这些需求只能随着更多信息的可用性而迭代定义。以下哪种技术允许计划和文档是迭代的还是持续的活动？","options":[{"letter":"A","text":"渐进式管理"},{"letter":"B","text":"渐进明细"},{"letter":"C","text":"迭代明细"},{"letter":"D","text":"瀑布式开发"}],"answer":"B","explanation":"项目的特点是循序渐进。它允许项目管理团队随着项目的发展将项目管理到更高的水平。"},{"number":24,"text":"您正在帮助一个组织提升其项目管理实践。您建议为每个组织项目制定一个商业案例，然后制定一个项目效益管理计划。你会推荐谁作为商业案例的所有者？","options":[{"letter":"A","text":"项目经理"},{"letter":"B","text":"项目发起人"},{"letter":"C","text":"项目团队"},{"letter":"D","text":"变更控制委员会"}],"answer":"B","explanation":"项目发起人通常负责项目商业案例文件的开发和维护。项目经理负责提供建议和监督，以保持项目商业案例、项目管理计划、项目章程和项目效益管理计划的成功措施相互一致，并与组织的目标和目的保持一致。"},{"number":25,"text":"在与另一个部门的项目经理共进午餐时，你被告知道守项目的适用标准就足够了。法规不一定适用于项目，因为它们是指导方针，作为项目经理，您可以选择决定它们是否适用。您自己的理解是？","options":[{"letter":"A","text":"两者都是一样的。该术语的用法因您所在的国家/地区而异"},{"letter":"B","text":"标准是项目团队制定的强制性要求；法规是政府发布的强制性要求"},{"letter":"C","text":"标准是以协商一致方式制定并经认可机构批准的指导方针，而法规是强制性的、政府强加的要求"},{"letter":"D","text":"标准是内部发布的指导方针；法规是政府发布的指导方针"}],"answer":"C","explanation":"标准被视为由公认机构制定并经协商一致确定的准则。相比之下，法规是政府强加的要求。例如，建筑规范就是法规的一个例子"},{"number":26,"text":"下列哪项不能成为项目结束的理由？","options":[{"letter":"A","text":"项目目标按计划达成"},{"letter":"B","text":"项目不会达到目标"},{"letter":"C","text":"某个关键干系人不支持项目"},{"letter":"D","text":"项目需求不复存在"}],"answer":"C","explanation":"某个关键干系人不支持项目，不一定就要终止项目。项目经理可以对其进行有效管理"},{"number":27,"text":"以下除了哪一项，其余都是项目团队需要考虑的事业环境因素？","options":[{"letter":"A","text":"人员考勤制度和加班政策"},{"letter":"B","text":"组织对沟通的要求"},{"letter":"C","text":"干系人的风险承受力"},{"letter":"D","text":"信息收集与发布系统"}],"answer":"B","explanation":"这是组织过程资产的一部分"},{"number":28,"text":"如果项目之间的联系仅限于共享顾主、供应商、技术或资源，则这些项目应该？","options":[{"letter":"A","text":"由项目管理办公室统一管理"},{"letter":"B","text":"被作为项目组合来协调管理"},{"letter":"C","text":"被作为项目集来协调管理"},{"letter":"D","text":"被归入项目作战室统一管理"}],"answer":"B","explanation":"项目之间没有内在联系，只适合当做项目组合进行管理。"},{"number":29,"text":"需求明确、产品清晰、风险低的情况适用哪类生命周期？","options":[{"letter":"A","text":"预测型生命周期"},{"letter":"B","text":"迭代和增量型生命周期"},{"letter":"C","text":"适应型生命周期"},{"letter":"D","text":"项目生命周期"}],"answer":"A","explanation":"从预测型到迭代和增量型，再到适应型生命周期，对需求明确程度、产品清晰程度的要求逐步降低，项目的风险程度越来越高。"},{"number":30,"text":"项目经理正在管理一个项目，其中有位于偏远地区的团队，以节省成本。这符合组织准则，该准则要求至少 25% 的工作应在远程地点完成。这是一个示例？","options":[{"letter":"A","text":"一个选择"},{"letter":"B","text":"一个约束"},{"letter":"C","text":"不可避免的情况"},{"letter":"D","text":"一个假设"}],"answer":"B","explanation":"这是一个约束的例子。制约因素是限制项目管理团队选择的因素。组织任务要求团队的某一部分在不同的地点工作以节省成本，这是项目管理团队需要纳入其规划的一个限制因素。"},{"number":31,"text":"关于项目商业文件，以下说法中错误的是？","options":[{"letter":"A","text":"项目发起人通常负责项目商业论证文件的制定和维护"},{"letter":"B","text":"项目经理根据商业论证，负责项目效益管理计划的制定和维护"},{"letter":"C","text":"商业论证和效益管理计划都是在项目启动之前编制的，并且要成为项目完成之后评估项目成功的依据"},{"letter":"D","text":"在阶段关口，需要根据当前项目环境，重新审查项目章程和商业文件"}],"answer":"B","explanation":"项目发起人通常负责项目商业论证文件的制定和维护。项目经理负责提供建议和见解，使项目商业论证、项目管理计划、项目章程和项目效益管理计划中的成功标准相一致，并与组织的目的和目标保持一致。"},{"number":32,"text":"以下哪个是对项目团队的最好描述？","options":[{"letter":"A","text":"项目团队就是从事项目管理工作的人员的集合"},{"letter":"B","text":"项目团队就是按项目计划执行项目工作的人员的集合"},{"letter":"C","text":"项目团队通常由来自同一个组织的、专业背景相似的人员组成"},{"letter":"D","text":"项目团队是从事项目的管理工作和执行工作的人员的集合"}],"answer":"D","explanation":"项目管理团队包括项目经理、其他项目管理人员，以及一线的项目执行人员。"},{"number":33,"text":"您正在为系统升级项目开发业务案例。尽管该项目将产生巨大的前期成本，但该项目有 一些有形和无形的好处。您可以在商业案例的财务效益部分使用以下哪项指标来支持该项目的投资决策？","options":[{"letter":"A","text":"绩效指数"},{"letter":"B","text":"挣值"},{"letter":"C","text":"效益成本比"},{"letter":"D","text":"石川分析"}],"answer":"C","explanation":"项目成功标准可能包括预期的财务业绩。当一个项目有可能产生财务效益时，可以使用净现值、投资回报率、内部收益率、投资回收期和收益成本比等财务指标，石川分析是一种问题根本原因分析技术，与情况无关。另一方面，EV 和 TCPI 是已经执行的项目的性能衡量指标。"},{"number":34,"text":"以下关于项目管理的说法，正确的是？","options":[{"letter":"A","text":"对项目范围、成本和进度的整合"},{"letter":"B","text":"在项目活动中运用各种知识、技能、工具和技术，来达到项目要求"},{"letter":"C","text":"把各种知识、技能、工具和技术应用于组织活动来提高经营绩效"},{"letter":"D","text":"在项目活动中运用各种知识、技能、工具和技术，来满足并超过项目干系人对项目的要求与期望"}],"answer":"B","explanation":"符合 PMBOK 指南中项目管理的定义。"},{"number":35,"text":"以下哪种方法能使组织资源得到最大利用以支持组织战略的实现？","options":[{"letter":"A","text":"PMO 统一管理"},{"letter":"B","text":"项目组合管理"},{"letter":"C","text":"项目集管理"},{"letter":"D","text":"项目管理"}],"answer":"B","explanation":"项目组合强调服务于组织战略，对项目进行优先级排序，实现组织资源价值最大化。"},{"number":36,"text":"规划过程组的主要作用是？","options":[{"letter":"A","text":"保证干系人期望与项目目的的一致性，让干系人明了项目范围和目标"},{"letter":"B","text":"为成功完成项目或阶段确定战略、战术及行动方案"},{"letter":"C","text":"按照项目管理计划来协调人员和资源、管理干系人期望，以及整合并实施项目活动"},{"letter":"D","text":"定期或不定期对项目绩效进行测量和分析，从而识别与项目管理计划的偏差"}],"answer":"B","explanation":"规划的主要作用就是明确目标和路线，识别最佳工作方法。"},{"number":37,"text":"以下哪个关于项目集的说法是正确的？","options":[{"letter":"A","text":"只要你愿意，可以把任何项目放在一个项目集中"},{"letter":"B","text":"各项目因为共享资源而被放在一个项目集中"},{"letter":"C","text":"只有存在必然内在联系的项目才能被放到一个项目集中"},{"letter":"D","text":"既然项目是临时的，项目集就必然是临时的"}],"answer":"C","explanation":"项目集中的项目必然有内在联系。"},{"number":38,"text":"贵组织最近获得了一个项目，该项目将在连接美国两个主要城市的高速公路上建造一系列桥梁。项目范围定义明确，并作为合同的一部分。这将是一份“仅限施工”的固定价格合同，运输当局将提供所有设计文件。尽管与同一权力机构最近完成的一些项目相比，该项目看起来相对简单，但该项目仍有一些限制因素。以下哪一项不是本项目的制约约束？","options":[{"letter":"A","text":"成本"},{"letter":"B","text":"资源"},{"letter":"C","text":"采购"},{"letter":"D","text":"风险"}],"answer":"C","explanation":"六个相互竞争的项目制约因素是范围、质量、进度、成本、资源和风险。采购不是项目竞争的制约因素。"},{"number":39,"text":"在一个项目的执行过程中，发现了大量的缺陷。项目经理确保将问题、缺陷解决方案和行动项结果记录到缺陷数据库中。缺陷数据库将被视为其中的一部分？","options":[{"letter":"A","text":"可交付成果"},{"letter":"B","text":"组织过程资产"},{"letter":"C","text":"专家判断"},{"letter":"D","text":"更改请求"}],"answer":"B","explanation":"问题和缺陷管理数据库被认为是组织过程资产的一部分。这些数据库通常包含历史问题和缺陷状态、控制信息、问题和缺陷解决方案以及行动项目结果。"},{"number":40,"text":"组织的商业价值是指？","options":[{"letter":"A","text":"组织在运营中所获得的全部利润"},{"letter":"B","text":"组织全部有形资产和无形资产价值的总和"},{"letter":"C","text":"衡量营利性组织成功程度的重要指标"},{"letter":"D","text":"组织短期的全部价值"}],"answer":"B","explanation":"组织的商业价值中包括全部的有形价值和无形价值。"},{"number":41,"text":"以下正确定义了项目的相关方的是？","options":[{"letter":"A","text":"在项目(结果)中享有利益的任何人"},{"letter":"B","text":"项目提供经济支持的任何人"},{"letter":"C","text":"认可项目的赞助人"},{"letter":"D","text":"参与项目的公司全体"}],"answer":"A","explanation":"项目相关方是积极或消极参与项目或其利益可能受项目实施完成的积极或消极影响的个人或组织。"},{"number":42,"text":"许多项目经理都看到了一张图表，显示“干系人的影响力”一开始很高，随着项目的进展而下降。相比之下，它还显示了“变更成本”开始时很低，并随着项目的进展而增加。项目经理应该从这张图中获得什么关键见解？","options":[{"letter":"A","text":"将项目搁置，直到进行所有更改"},{"letter":"B","text":"干系人的影响在项目结束时并不重要"},{"letter":"C","text":"为项目结束时的预期变化预留资金"},{"letter":"D","text":"在项目中尽早进行更改"}],"answer":"D","explanation":"项目中应尽早进行变更，以避免额外的成本和延误。干系人的影响力在项目开始时很高，而在项目结束时很低。相比之下，在项目开始时对项目进行更改的成本较低，而在项目结束时成本较高。"},{"number":43,"text":"项目经理是？","options":[{"letter":"A","text":"项目发起人派来实现项目目标的个人"},{"letter":"B","text":"项目执行组织派来实现项目目标的个人"},{"letter":"C","text":"通过竞争性投标，获得项目管理服务合同的个人"},{"letter":"D","text":"通常是指卖方组织中的项目负责人"}],"answer":"B","explanation":"项目经理是为项目执行组织实现项目目标的那个人。"},{"number":44,"text":"你是某污水处理厂的项目经理，政府强制要求，你必须保证污水处理不能对周边居民造成负面影响，从项目的角度，这是一个？","options":[{"letter":"A","text":"假设条件"},{"letter":"B","text":"制约因素"},{"letter":"C","text":"最佳实践"},{"letter":"D","text":"可交付成果"}],"answer":"B","explanation":"政府部门对环保方面的强制要求属于限制项目选择的制约因素，项目制约因素还包括合同条文、客户和执行组织强加的进度里程碑，事先确定的预算等。假设条件是指那些被假定为“真”但有可能不为“真”的事情，对项目有潜在的风险。"},{"number":45,"text":"贵公司在本财政年度启动了多个项目，由于同时执行项目的人力资源不足，大多数项目都在苦苦挣扎。作为一名经验丰富的项目管理专业人士，你会建议管理层如何处理这个问题？","options":[{"letter":"A","text":"根据业务价值和资源可用性确定项目的优先级"},{"letter":"B","text":"首先执行较小的项目，以便在一年中完成最大数量的项目"},{"letter":"C","text":"优先考虑ROI较高的项目"},{"letter":"D","text":"增加所有项目的预算和时间表，以便有效共享资源"}],"answer":"A","explanation":"项目争夺资源，解决这个问题的办法就是确定优先级。然而，项目优先级并不总是取决于ROI（例如，对于一些项目，由于无形利益，ROI计算很困难）。建议根据业务价值对项目进行优先级排序。"},{"number":46,"text":"PMO 最基本的职责是？","options":[{"letter":"A","text":"为项目制定项目管理计划"},{"letter":"B","text":"执行某个具体的项目"},{"letter":"C","text":"为项目提供咨询和指导"},{"letter":"D","text":"项目变更控制"}],"answer":"C","explanation":"无论是支持型、控制型还是指令型的PMO，都需要为项目提供咨询和指导，这是PMO最基本的职责。"},{"number":47,"text":"您的组织需要在所有复杂和高价值项目的项目启动之前进行全面的业务分析活动。在复杂和高价值的项目中，业务分析师通常会在项目启动前执行以下哪些活动？","options":[{"letter":"A","text":"确定问题，确定业务需求和可行的解决方案"},{"letter":"B","text":"完成项目范围说明书和 WBS 字典"},{"letter":"C","text":"建立项目范围基线"},{"letter":"D","text":"确定项目范围并制定 WBS"}],"answer":"A","explanation":"典型的业务分析师的职责包括确定问题，确定业务需求，并为满足这些需求推荐可行的解决方案"},{"number":48,"text":"项目组合管理的主要目标是？","options":[{"letter":"A","text":"正确地完成某个项目 配的优先顺序"},{"letter":"B","text":"正确地完成一系列相互关联的项目"},{"letter":"C","text":"选择一系列正确的且不一定相互关联的项目，并排定资源分配的优先顺序"},{"letter":"D","text":"选择一系列正确的且相互关联的项目，并排定资源分配的优先顺序"}],"answer":"C","explanation":"项目组合管理关注：项目之间的优先顺序以及由此而形成的资源分配的优先顺序。"},{"number":49,"text":"您是根据与买方组织签订的合同执行工作的项目的项目经理。项目刚开始，您就注意到买方组织在财务条款上犯了一个错误，您的组织将从这一疏忽中受益匪浅。你的立场应该是什么？","options":[{"letter":"A","text":"与你的管理层讨论如何通过增加公司收入来获得奖金"},{"letter":"B","text":"与买方组织中的对方进行非正式检查，看看对方是否注意到了这个错误"},{"letter":"C","text":"将错误通知买方组织，并对合同进行修改，因为这是出于善意"},{"letter":"D","text":"不要采取任何行动，因为合同是一份具有约束力的法律文件。"}],"answer":"C","explanation":"合乎道德的做法是将此通知买方组织，并对合同进行修改。"},{"number":50,"text":"以下哪个正确表述了从高到低的概念之间的层次结构？","options":[{"letter":"A","text":"组织战略、项目集、项目组合、项目"},{"letter":"B","text":"项目组合、组织战略、项目集、项目"},{"letter":"C","text":"组织战略、项目组合、项目集、项目"},{"letter":"D","text":"项目集、项目组合、组织战略、项目"}],"answer":"C","explanation":"从高层次向低层次排序。"},{"number":51,"text":"以下哪个关于项目组合的说法是正确的？","options":[{"letter":"A","text":"各项目因相互之间的直接关联而被放在一个项目组合中"},{"letter":"B","text":"可以从项目组合中剔除现有的项目，也可以向其中增加新项目"},{"letter":"C","text":"同一个项目组合中的项目都能得到一视同仁的对待"},{"letter":"D","text":"一个组织通常只能有一个项目组合"}],"answer":"B","explanation":"可以删除对战略目标贡献最小的项目，也可以增加贡献较大的项目。"},{"number":52,"text":"以下关于项目管理过程组或过程的说明，不正确的是？","options":[{"letter":"A","text":"项目管理过程组在不同类型的项目上都是相同的"},{"letter":"B","text":"当项目发生变更时，项目管理过程也发生变更"},{"letter":"C","text":"在不同项目上，各项目管理过程组一般都有基本相同的依赖关系和顺序关系"},{"letter":"D","text":"项目进入执行阶段后，仍然可以开展规划过程组的过程"}],"answer":"B","explanation":"项目管理过程的变更与项目变更之间没有必然联系。"},{"number":53,"text":"以下哪一个说法是正确的？","options":[{"letter":"A","text":"既然与以前项目的可交付成果比较，本项目的可交付成果中存在某些重复的元素，所以本项目从本质上讲不再是独特的"},{"letter":"B","text":"项目只能生产出有形的项目产品"},{"letter":"C","text":"项目大多是为了创造持久性的结果"},{"letter":"D","text":"持续时间长达10年的工作，不应该当项目来做"}],"answer":"C","explanation":"项目是临时的，但项目所形成的最终可交付成果往往具有持续性的生命力。"},{"number":54,"text":"某公司建立了一个项目管理办公室(PMO)，用于协调和管理其众多项目。公司的PMO提出了一个具体的项目组织结构建议，并作为标准在全公司实施。该组织结构的特点是设置了享有最高权力(包括控制项目预算)的全职项目经理和全职管理人员。该PMO提出了何种组织结构？","options":[{"letter":"A","text":"强矩阵"},{"letter":"B","text":"弱矩阵"},{"letter":"C","text":"项目型"},{"letter":"D","text":"职能型"}],"answer":"C","explanation":"项目型组织结构中，项目经理的职权最大和对于项目的预算享有最高控制权力。"},{"number":55,"text":"以下哪个最好地描述了项目与运营的区别？","options":[{"letter":"A","text":"项目受制于有限的资源，而用于运营的资源通常不受限制"},{"letter":"B","text":"项目不会因目标的实现而结束，而运营会因目标的实现而结束"},{"letter":"C","text":"项目的持续时间很短，而运营的持续时间很长"},{"letter":"D","text":"项目生产独特的结果，而运营生产重复性结果"}],"answer":"D","explanation":"项目生产独特的可交付成果，而运营重复生产同样的结果。"},{"number":56,"text":"以下哪个关于项目生命周期的说法是正确的？","options":[{"letter":"A","text":"所有项目的项目生命周期都包括启动、规划、执行、监控和收尾等5个阶段"},{"letter":"B","text":"相关方的职责和作用，在整个项目生命周期中通常保持不变"},{"letter":"C","text":"随着项目接近完工，项目失败的可能性降低，负面风险的影响也降低"},{"letter":"D","text":"即便同一类项目，也可以有不同的项目生命周期阶段划分"}],"answer":"D","explanation":"如何进行阶段划分，取决于具体组织的需要。尽管人们可能认为某种阶段划分比较适合于某类项目，但同一行业甚至同一组织内的项目阶段划分仍然可能差别很大。"},{"number":57,"text":"以下哪个不是项目的可交付成果？","options":[{"letter":"A","text":"项目管理团队所编制的项目管理计划"},{"letter":"B","text":"批量生产的汽车零配件"},{"letter":"C","text":"学校新开发的课程"},{"letter":"D","text":"研究课题所发现的新知识"}],"answer":"B","explanation":"不是项目所产生出来的结果，而是运营得到的产品。"},{"number":58,"text":"以下哪一项不是项目失败的原因？","options":[{"letter":"A","text":"计划要求在太短的时间完成太多的任务"},{"letter":"B","text":"财务估算不到位"},{"letter":"C","text":"由一个中心计划编制部门执行计划编制"},{"letter":"D","text":"管理层项目管理经验不足"}],"answer":"D","explanation":"高级管理层不管理项目，他们主要的工作是进行决策。"},{"number":59,"text":"您的项目依赖于另一个项目团队正在创建的可交付成果的输出。交付结果延迟了三周，这是您在每周状态报告中传达的事实。在最近的全公司状态会议上，该项目的经理报告说， 该项目正在按时进行。你应该怎么做？","options":[{"letter":"A","text":"继续在您自己的状态报告中报告延迟交付"},{"letter":"B","text":"向其他项目经理指出错误"},{"letter":"C","text":"什么都不做"},{"letter":"D","text":"继续在您自己的状态报告中报告延迟交付，并将其他项目状态报告中的错误信息通知适当的管理层"}],"answer":"D","explanation":"继续在状态报告中报告延迟交付的内容, 并通知适当的管理层其他项目经理报告的信息不正确。PMI 道德规范要求项目经理遵守项目流程和政策, 并及时准确地报告信息。此外, 当项目经理发现其他人未能遵守相关政策和流程时, 他们还需要向适当的管理层报告。"},{"number":60,"text":"以下关于项目的说法都是正确的，除了？","options":[{"letter":"A","text":"项目经常作为实现组织战略计划的一种手段"},{"letter":"B","text":"项目可以在组织中的所有层次上进行"},{"letter":"C","text":"项目是那些在组织日常运营范围内无法有效开展的活动"},{"letter":"D","text":"项目可以由一个人、一个组织单元或多个组织单元构成 ---"}],"answer":"D","explanation":"构成\"的说法，不对。正确的说法是：一个项目可能涉及一个人、一个组织单元或多个组织单元。"}]}];
+
+// State
+var examQuestions=[], selectedPart='all', selectedQCount=0, currentIndex=0;
+var userAnswers={}, markedQuestions=new Set(), timerInterval=null, timeLeft=0, startTime=null;
+var examFinished=false, reviewMode=false;
+
+// Build part selector
+(function(){
+  var sel=document.getElementById('partSelector');
+  EXAM_PARTS.forEach(function(part,idx){
+    var label=document.createElement('label');
+    label.className='flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 cursor-pointer transition-colors hover:bg-gray-50';
+    label.innerHTML='<input type="radio" name="part" value="'+idx+'" class="accent-primary"><span class="text-sm font-medium">'+part.title+' ('+part.questions.length+'题)</span>';
+    sel.appendChild(label);
+  });
+  sel.addEventListener('change',function(e){
+    document.querySelectorAll('#partSelector label').forEach(function(l){l.className='flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 cursor-pointer transition-colors hover:bg-gray-50';});
+    e.target.closest('label').className='flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5 cursor-pointer transition-colors hover:bg-primary/10';updateTimeEstimate();
+  });
+})();
+
+function updateTimeEstimate(){
+  var sel=document.querySelector('input[name="part"]:checked').value;
+  var pool=[];
+  if(sel==='all'){EXAM_PARTS.forEach(function(p){pool=pool.concat(p.questions);});}
+  else{pool=EXAM_PARTS[parseInt(sel)].questions.slice();}
+  var count=selectedQCount>0?Math.min(selectedQCount,pool.length):pool.length;
+  var mins=Math.max(10,Math.ceil(count*1.5));
+  var el=document.getElementById('timeEstimate');
+  if(el)el.textContent=mins;
+}
+
+function setQCount(n){
+  selectedQCount=n;
+  document.querySelectorAll('.qcount-btn').forEach(function(b){
+    var a=parseInt(b.dataset.count)===n;
+    b.classList.toggle('border-primary',a);b.classList.toggle('bg-primary/5',a);b.classList.toggle('border-primary/20',!a);updateTimeEstimate();
+  });
+}
+
+function shuffleArray(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+
+function startExam(){
+  examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};markedQuestions=new Set();
+  var sel=document.querySelector('input[name="part"]:checked').value;
+  var pool=[];
+  if(sel==='all'){EXAM_PARTS.forEach(function(p){pool=pool.concat(p.questions);});}
+  else{pool=EXAM_PARTS[parseInt(sel)].questions.slice();}
+  pool=shuffleArray(pool);
+  examQuestions=selectedQCount>0?pool.slice(0,Math.min(selectedQCount,pool.length)):pool;
+  // Assign sequential numbers for display
+  examQuestions.forEach(function(q,i){q._displayNum=i+1;});
+  document.getElementById('totalNum').textContent=examQuestions.length;
+  timeLeft=Math.max(10,Math.ceil(examQuestions.length*1.5))*60;
+  startTime=Date.now();
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('examScreen').classList.remove('hidden');
+  document.getElementById('resultScreen').classList.add('hidden');
+  startTimer();renderQuestion();renderQuestionMap();
+}
+
+function startTimer(){clearInterval(timerInterval);updateTimerDisplay();timerInterval=setInterval(function(){timeLeft--;updateTimerDisplay();if(timeLeft<=0){clearInterval(timerInterval);submitExam();}},1000);}
+
+function updateTimerDisplay(){
+  var m=Math.floor(Math.max(0,timeLeft)/60),s=Math.max(0,timeLeft)%60;
+  var el=document.getElementById('timerDisplay');
+  document.getElementById('timerText').textContent=m+':'+(s<10?'0':'')+s;
+  if(timeLeft<=300)el.classList.add('timer-warning');else el.classList.remove('timer-warning');
+}
+
+function renderQuestion(){
+  var q=examQuestions[currentIndex];
+  document.getElementById('currentNum').textContent=currentIndex+1;
+  document.getElementById('partLabel').textContent=q._partTitle||'';
+  document.getElementById('questionText').textContent=(currentIndex+1)+'、'+q.text;
+  document.getElementById('questionArea').classList.add('fade-in');
+  var optArea=document.getElementById('optionsArea');optArea.innerHTML='';
+
+  q.options.forEach(function(opt){
+    var isSelected=userAnswers[currentIndex]===opt.letter;
+    var isCorrect=reviewMode&&opt.letter===q.answer;
+    var isWrong=reviewMode&&isSelected&&opt.letter!==q.answer;
+    var btn=document.createElement('button');
+    var cls='option-btn w-full text-left p-4 rounded-xl border-2 cursor-pointer flex items-start gap-3 ';
+    if(reviewMode){if(isCorrect)cls+='border-correct bg-correct-bg';else if(isWrong)cls+='border-wrong bg-wrong-bg';else cls+='border-gray-200 bg-white';}
+    else if(isSelected)cls+='border-primary bg-primary/5 shadow-md';
+    else cls+='border-gray-200 bg-white hover:border-primary/30 hover:shadow-sm';
+    btn.className=cls;
+    if(!reviewMode)btn.onclick=(function(l){return function(){selectOption(l)};})(opt.letter);
+    else{btn.classList.add('disabled');btn.style.cursor='default';}
+
+    var circ=document.createElement('span');
+    var lc='w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ';
+    if(reviewMode&&isCorrect)lc+='bg-correct text-white';
+    else if(reviewMode&&isWrong)lc+='bg-wrong text-white';
+    else if(isSelected)lc+='bg-primary text-white';
+    else lc+='bg-gray-100 text-ink-light';
+    circ.className=lc;circ.textContent=opt.letter;
+
+    var txt=document.createElement('span');txt.className='pt-1 leading-relaxed text-sm md:text-base';txt.textContent=opt.text;
+    btn.appendChild(circ);btn.appendChild(txt);
+
+    if(reviewMode&&isCorrect){var ic=document.createElement('span');ic.className='ml-auto text-correct shrink-0';ic.innerHTML='<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';btn.appendChild(ic);}
+    else if(reviewMode&&isWrong){var ic2=document.createElement('span');ic2.className='ml-auto text-wrong shrink-0';ic2.innerHTML='<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';btn.appendChild(ic2);}
+    optArea.appendChild(btn);
+  });
+
+  var expArea=document.getElementById('explanationArea');
+  if(reviewMode){
+    var ua=userAnswers[currentIndex],ca=q.answer,exp='';
+    if(ua===ca)exp='回答正确！正确答案是 '+ca+'。';
+    else if(ua)exp='回答错误。你选了 '+ua+'，正确答案是 '+ca+'。';
+    else exp='未作答。正确答案是 '+ca+'。';
+    if(q.explanation)exp+=' '+q.explanation;
+    document.getElementById('explanationText').textContent=exp;expArea.classList.remove('hidden');
+  }else{expArea.classList.add('hidden');}
+
+  document.getElementById('prevBtn').disabled=currentIndex===0;
+  var nextBtn=document.getElementById('nextBtn');
+  if(currentIndex<examQuestions.length-1)nextBtn.innerHTML='下一题 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>';
+  else if(reviewMode)nextBtn.innerHTML='返回结果 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>';
+  else nextBtn.innerHTML='交卷 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+
+  // Update top-right submit button based on mode
+  var topBtn=document.getElementById('topSubmitBtn');
+  if(reviewMode){topBtn.innerHTML='<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>返回结果';topBtn.onclick=function(){document.getElementById('examScreen').classList.add('hidden');document.getElementById('resultScreen').classList.remove('hidden');};}
+  else{topBtn.innerHTML='<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>交卷';topBtn.onclick=function(){confirmSubmit();};}
+updateMarkButton();
+  document.getElementById('progressBar').style.width=(Object.keys(userAnswers).length/examQuestions.length*100).toFixed(1)+'%';
+  updateQuestionMap();
+}
+
+function selectOption(l){if(examFinished||reviewMode)return;if(userAnswers[currentIndex]===l)delete userAnswers[currentIndex];else userAnswers[currentIndex]=l;updateOptionStyles();updateQuestionMap();document.getElementById('progressBar').style.width=(Object.keys(userAnswers).length/examQuestions.length*100).toFixed(1)+'%';}
+function prevQuestion(){if(currentIndex>0){currentIndex--;renderQuestion();}}
+function nextQuestion(){if(currentIndex<examQuestions.length-1){currentIndex++;renderQuestion();}else if(reviewMode){document.getElementById('examScreen').classList.add('hidden');document.getElementById('resultScreen').classList.remove('hidden');}else{confirmSubmit();}}
+function toggleMark(){if(markedQuestions.has(currentIndex))markedQuestions.delete(currentIndex);else markedQuestions.add(currentIndex);// Update top-right submit button based on mode
+  var topBtn=document.getElementById('topSubmitBtn');
+  if(reviewMode){topBtn.innerHTML='<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>返回结果';topBtn.onclick=function(){document.getElementById('examScreen').classList.add('hidden');document.getElementById('resultScreen').classList.remove('hidden');};}
+  else{topBtn.innerHTML='<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>交卷';topBtn.onclick=function(){confirmSubmit();};}
+updateMarkButton();updateQuestionMap();}
+function updateMarkButton(){var m=markedQuestions.has(currentIndex);document.getElementById('markIcon').setAttribute('fill',m?'currentColor':'none');document.getElementById('markText').textContent=m?'已标记':'标记';}
+function toggleQuestionMap(){document.getElementById('questionMap').classList.toggle('hidden');}
+
+function renderQuestionMap(){
+  var grid=document.getElementById('questionMapGrid');grid.innerHTML='';
+  examQuestions.forEach(function(q,i){var btn=document.createElement('button');btn.className='w-10 h-10 rounded-lg text-xs font-bold cursor-pointer transition-all duration-200 hover:scale-110 ';btn.textContent=i+1;btn.onclick=(function(idx){return function(){currentIndex=idx;renderQuestion();};})(i);grid.appendChild(btn);});
+  updateQuestionMap();
+}
+
+
+// Lightweight style update on answer selection - no DOM rebuild
+function updateOptionStyles(){
+  var q=examQuestions[currentIndex];
+  var btns=document.getElementById('optionsArea').children;
+  for(var i=0;i<btns.length;i++){
+    var btn=btns[i];
+    var letter=q.options[i].letter;
+    var isSelected=userAnswers[currentIndex]===letter;
+    var cls='option-btn w-full text-left p-4 rounded-xl border-2 cursor-pointer flex items-start gap-3 ';
+    if(isSelected)cls+='border-primary bg-primary/5 shadow-md';
+    else cls+='border-gray-200 bg-white hover:border-primary/30 hover:shadow-sm';
+    btn.className=cls;
+    // Update circle
+    var circ=btn.querySelector('span');
+    var lc='w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ';
+    if(isSelected)lc+='bg-primary text-white';else lc+='bg-gray-100 text-ink-light';
+    circ.className=lc;
+  }
+}
+function updateQuestionMap(){
+  var btns=document.getElementById('questionMapGrid').children;
+  for(var i=0;i<btns.length;i++){
+    var btn=btns[i],isA=userAnswers[i]!==undefined,isM=markedQuestions.has(i),isC=i===currentIndex;
+    var cls='w-10 h-10 rounded-lg text-xs font-bold cursor-pointer transition-all duration-200 hover:scale-110 ';
+    if(reviewMode){cls+=userAnswers[i]===examQuestions[i].answer?'bg-correct text-white':'bg-wrong text-white';}
+    else if(isC){cls+='ring-2 ring-primary ring-offset-2 ';cls+=isM?'bg-yellow-400 text-white':isA?'bg-primary text-white':'bg-white text-ink border border-gray-200';}
+    else if(isM)cls+='bg-yellow-400 text-white';else if(isA)cls+='bg-primary text-white';else cls+='bg-gray-100 text-ink-light hover:bg-gray-200';
+    btn.className=cls;
+  }
+}
+
+function confirmSubmit(){
+  var a=Object.keys(userAnswers).length,t=examQuestions.length,u=t-a;
+  document.getElementById('confirmText').textContent='你已回答 '+a+'/'+t+' 题'+(u>0?'，还有 '+u+' 题未作答。':'。')+'确定要提交吗？';
+  document.getElementById('confirmModal').classList.remove('hidden');
+}
+function closeModal(){document.getElementById('confirmModal').classList.add('hidden');}
+
+function submitExam(){
+  clearInterval(timerInterval);examFinished=true;closeModal();
+  var c=0,w=0,u=0;
+  examQuestions.forEach(function(q,i){if(userAnswers[i]===undefined)u++;else if(userAnswers[i]===q.answer)c++;else w++;});
+  // Save wrong/unanswered to mistake bank
+  var bank=getMistakeBank();
+  examQuestions.forEach(function(q,i){
+    var key=q.text.substring(0,60);
+    if(userAnswers[i]!==q.answer){
+      if(!bank.find(function(m){return m.key===key;})){
+        bank.push({key:key,text:q.text,options:q.options,answer:q.answer,explanation:q.explanation||'',wrongAt:Date.now(),wrongCount:1});
+      }else{
+        var existing=bank.find(function(m){return m.key===key;});
+        existing.wrongCount=(existing.wrongCount||0)+1;
+        existing.wrongAt=Date.now();
+      }
+    }else{
+      bank=bank.filter(function(m){return m.key!==key;});
+    }
+  });
+  saveMistakeBank(bank);
+  var t=examQuestions.length,pct=Math.round(c/t*100);
+  var elapsed=Math.floor((Date.now()-startTime)/1000),em=Math.floor(elapsed/60),es=elapsed%60;
+  document.getElementById('scorePercent').textContent=pct+'%';
+  document.getElementById('correctCount').textContent=c;
+  document.getElementById('wrongCount').textContent=w;
+  document.getElementById('unansweredCount').textContent=u;
+  document.getElementById('timeUsed').textContent=em+'分'+es+'秒';
+  var circ=326.73;
+  var sc=document.getElementById('scoreCircle');sc.style.strokeDashoffset=circ-(pct/100)*circ;
+  sc.style.stroke=pct>=80?'#22C55E':pct>=60?'#F59E0B':'#DC2626';
+  document.getElementById('scoreEmoji').textContent=pct>=90?'🎉':pct>=80?'👏':pct>=60?'💪':'📚';
+  document.getElementById('examScreen').classList.add('hidden');
+  document.getElementById('resultScreen').classList.remove('hidden');
+  document.getElementById('resultScreen').scrollIntoView({behavior:'smooth'});
+  updateStartScreenMistakes();
+}
+function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();}
+function restartExam(){document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.remove('hidden');}
+
+// ===== Mistake Bank (localStorage) =====
+var MISTAKE_KEY='pmp_mistake_bank';
+function getMistakeBank(){try{var d=localStorage.getItem(MISTAKE_KEY);return d?JSON.parse(d):[];}catch(e){return[];}}
+function saveMistakeBank(bank){try{localStorage.setItem(MISTAKE_KEY,JSON.stringify(bank));}catch(e){}}
+function clearMistakeBank(){localStorage.removeItem(MISTAKE_KEY);updateStartScreenMistakes();}
+function getMistakeCount(){return getMistakeBank().length;}
+
+function updateStartScreenMistakes(){
+  var count=getMistakeCount();
+  var badge=document.getElementById('mistakeBadge');
+  var card=document.getElementById('mistakeCard');
+  var countEl=document.getElementById('mistakeCountText');
+  if(badge)badge.textContent=count;
+  if(card){
+    if(count>0){card.classList.remove('hidden');card.classList.add('fade-in');}
+    else card.classList.add('hidden');
+  }
+  if(countEl)countEl.textContent=count;
+  var drBtn=document.getElementById('drillBtn');
+  var mixBtn=document.getElementById('mixBtn');
+  if(drillBtn){drillBtn.disabled=count===0;if(count>0)drillBtn.classList.remove('opacity-40','cursor-not-allowed');else drBtn.classList.add('opacity-40','cursor-not-allowed');}
+  if(mixBtn){mixBtn.disabled=count===0;if(count>0)mixBtn.classList.remove('opacity-40','cursor-not-allowed');else mixBtn.classList.add('opacity-40','cursor-not-allowed');}
+}
+
+var examMode='normal';
+
+function startDrill(){
+  examMode='drill';
+  var bank=getMistakeBank();
+  if(bank.length===0)return;
+  examQuestions=shuffleArray(bank.map(function(m){return{text:m.text,options:m.options,answer:m.answer,explanation:m.explanation};}));
+  startExamWithQuestions(examQuestions,'错题专项提升');
+}
+
+function startMix(){
+  examMode='mix';
+  var bank=getMistakeBank();
+  var bankKeys=bank.map(function(m){return m.key;});
+  var allPool=[];
+  EXAM_PARTS.forEach(function(p){allPool=allPool.concat(p.questions);});
+  var fresh=allPool.filter(function(q){return!bankKeys.includes(q.text.substring(0,60));});
+  fresh=shuffleArray(fresh);
+  var mistakeQs=shuffleArray(bank).slice(0,Math.max(5,Math.ceil(selectedQCount/2)));
+  var freshQs=fresh.slice(0,Math.max(5,selectedQCount>0?selectedQCount-mistakeQs.length:10));
+  var mixed=shuffleArray(mistakeQs.map(function(m){return{text:m.text,options:m.options,answer:m.answer,explanation:m.explanation};}).concat(freshQs));
+  if(mixed.length===0)return;
+  startExamWithQuestions(mixed,'混合练习 (错题+新题)');
+}
+
+function startExamWithQuestions(questions,label){
+  examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};markedQuestions=new Set();
+  examQuestions=questions;
+  document.getElementById('totalNum').textContent=examQuestions.length;
+  document.getElementById('partLabel').textContent=label||'';
+  timeLeft=Math.max(10,Math.ceil(examQuestions.length*1.5))*60;
+  startTime=Date.now();
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('examScreen').classList.remove('hidden');
+  document.getElementById('resultScreen').classList.add('hidden');
+  document.getElementById('mistakeBookScreen').classList.add('hidden');
+  startTimer();renderQuestion();renderQuestionMap();
+}
+
+function showMistakeBook(){
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('mistakeBookScreen').classList.remove('hidden');
+  renderMistakeBook();
+}
+
+function hideMistakeBook(){
+  document.getElementById('mistakeBookScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.remove('hidden');
+  updateStartScreenMistakes();
+}
+
+function renderMistakeBook(){
+  var bank=getMistakeBank();
+  var container=document.getElementById('mistakeList');
+  container.innerHTML='';
+  if(bank.length===0){
+    container.innerHTML='<p class="text-center text-ink-muted py-12">暂无错题，继续保持！</p>';
+    return;
+  }
+  bank.sort(function(a,b){return (b.wrongCount||1)-(a.wrongCount||1);});
+  bank.forEach(function(m,idx){
+    var div=document.createElement('div');
+    div.className='bg-white rounded-xl border border-gray-200 p-5 mb-4';
+    div.innerHTML='<div class="flex items-start justify-between gap-3 mb-3"><p class="text-sm font-medium leading-relaxed flex-1">'+(idx+1)+'、'+m.text+'</p><span class="shrink-0 text-xs px-2 py-1 rounded-full bg-wrong-bg text-wrong font-bold">错 '+(m.wrongCount||1)+' 次</span></div><div class="flex flex-wrap gap-2 mb-3">'+m.options.map(function(o){var isC=o.letter===m.answer;return '<span class="text-xs px-2.5 py-1 rounded-lg '+(isC?'bg-correct-bg text-correct font-bold border border-correct/30':'bg-gray-50 text-ink-light')+'">'+o.letter+'. '+o.text+'</span>';}).join('')+'</div>'+(m.explanation?'<p class="text-xs text-ink-muted leading-relaxed border-t border-gray-100 pt-3">解析：'+m.explanation+'</p>':'');
+    container.appendChild(div);
+  });
+}
+
+function confirmClearMistakes(){document.getElementById('clearConfirmModal').classList.remove('hidden');}
+function doClearMistakes(){clearMistakeBank();document.getElementById('clearConfirmModal').classList.add('hidden');renderMistakeBook();}
+
+updateStartScreenMistakes();
+updateTimeEstimate();// Keyboard shortcuts
+document.addEventListener('keydown',function(e){
+  if(document.getElementById('examScreen').classList.contains('hidden'))return;
+  if(e.key==='ArrowLeft')prevQuestion();else if(e.key==='ArrowRight')nextQuestion();
+  else if(!reviewMode){var k=e.key.toLowerCase();if(k==='a'||k==='1')selectOption('A');else if(k==='b'||k==='2')selectOption('B');else if(k==='c'||k==='3')selectOption('C');else if(k==='d'||k==='4')selectOption('D');}
+});
+</script>
+</body>
+</html>
