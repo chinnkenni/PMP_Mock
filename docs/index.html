@@ -63,11 +63,18 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
   </div>
 
   <div class="mb-6">
-    <label class="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 cursor-pointer select-none hover:bg-gray-50 transition-colors">
-      <input type="checkbox" id="shuffleToggle" class="w-5 h-5 accent-primary" onchange="shuffleOptions=this.checked">
-      <div>
+    <label class="flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 bg-white shadow-sm cursor-pointer select-none hover:shadow-md transition-all">
+      <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      </div>
+      <div class="flex-1 min-w-0">
         <span class="text-sm font-semibold text-ink">打乱答案顺序</span>
-        <p class="text-xs text-ink-muted">随机排列 A/B/C/D 选项，避免记住选项位置</p>
+        <p class="text-xs text-ink-muted mt-0.5">随机排列 A/B/C/D 选项，避免记住选项位置</p>
+      </div>
+      <div class="relative shrink-0">
+        <input type="checkbox" id="shuffleToggle" class="sr-only peer" onchange="shuffleOptions=this.checked">
+        <div class="w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-primary transition-colors"></div>
+        <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
       </div>
     </label>
   </div>
@@ -155,6 +162,7 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
   </div>
   <div id="questionMap" class="hidden mt-4 bg-surface-card rounded-2xl shadow-md p-6 fade-in">
     <div class="flex flex-wrap gap-2" id="questionMapGrid"></div>
+    <div id="timeRankList" class="space-y-2 mt-4 hidden"></div>
     <div class="flex items-center gap-4 mt-4 text-xs text-ink-muted">
       <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-primary inline-block"></span>已答</span>
       <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-yellow-400 inline-block"></span>标记</span>
@@ -191,6 +199,13 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       用时 <span id="timeUsed">0:00</span>
     </div>
+  </div>
+  <div id="timeDetailSection" class="hidden bg-surface-card rounded-2xl shadow-xl p-6 md:p-8 mb-6">
+    <h3 class="text-lg font-bold text-ink mb-1 flex items-center gap-2">
+      每题停留时长
+    </h3>
+    <p class="text-xs text-ink-muted mb-4">按停留时间从长到短排列，帮助发现薄弱知识点</p>
+    <div id="timeDetailList" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
   </div>
   <div class="flex gap-3">
     <button onclick="reviewExam()" class="flex-1 bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-primary/25">查看解析</button>
@@ -252,7 +267,7 @@ var EXAM_PARTS = [{"title":"一部分：项目管理基础知识","questions":[{
 // State
 var examQuestions=[], selectedPart='all', selectedQCount=0, currentIndex=0, shuffleOptions=false;
 var userAnswers={}, questionTimers={}, lastQuestionTime=0, markedQuestions=new Set(), timerInterval=null, timeLeft=0, startTime=null;
-var examFinished=false, reviewMode=false;
+var examFinished=false, reviewMode=false, shuffledOptionsCache=null, frozenTimers=null;
 
 // Build part selector
 (function(){
@@ -280,13 +295,25 @@ function getShuffledOptions(q){
   var shuffled=shuffleArrayCopy(q.options);
   return shuffled;
 }
+function buildShuffledCache(){
+  shuffledOptionsCache={};
+  examQuestions.forEach(function(q,qi){
+    shuffledOptionsCache[qi]=shuffleArrayCopy(q.options);
+  });
+}
+function displayToOriginal(qi,displayLetter){
+  var cache=shuffledOptionsCache;if(!cache||!cache[qi])return displayLetter;
+  var opts=cache[qi];
+  for(var i=0;i<opts.length;i++){if(String.fromCharCode(65+i)===displayLetter)return opts[i].letter;}
+  return displayLetter;
+}
 
 // ===== Question Time Tracking =====
 function startQuestionTimer(){
   lastQuestionTime=Date.now();
 }
 function stopQuestionTimer(){
-  if(currentIndex>=0 && lastQuestionTime>0){
+  if(!reviewMode && currentIndex>=0 && lastQuestionTime>0){
     var elapsed=Date.now()-lastQuestionTime;
     if(!questionTimers[currentIndex])questionTimers[currentIndex]=0;
     questionTimers[currentIndex]+=elapsed;
@@ -321,7 +348,7 @@ function setQCount(n){
 function shuffleArray(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
 
 function startExam(){
-  examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};markedQuestions=new Set();
+  examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};markedQuestions=new Set();shuffledOptionsCache=null;frozenTimers=null;
   var sel=document.querySelector('input[name="part"]:checked').value;
   var pool=[];
   if(sel==='all'){EXAM_PARTS.forEach(function(p){pool=pool.concat(p.questions);});}
@@ -336,6 +363,8 @@ function startExam(){
   document.getElementById('startScreen').classList.add('hidden');
   document.getElementById('examScreen').classList.remove('hidden');
   document.getElementById('resultScreen').classList.add('hidden');
+  questionTimers={};lastQuestionTime=0;
+  if(shuffleOptions)buildShuffledCache();else shuffledOptionsCache=null;
   startTimer();renderQuestion();renderQuestionMap();
 }
 
@@ -351,24 +380,26 @@ function updateTimerDisplay(){
 function renderQuestion(){
   stopQuestionTimer();startQuestionTimer();
   var q=examQuestions[currentIndex];
-  var opts=getShuffledOptions(q);
+  var opts=shuffleOptions&&shuffledOptionsCache&&shuffledOptionsCache[currentIndex]?shuffledOptionsCache[currentIndex]:q.options;
   document.getElementById('currentNum').textContent=currentIndex+1;
   document.getElementById('partLabel').textContent=q._partTitle||'';
   document.getElementById('questionText').textContent=(currentIndex+1)+'、'+q.text;
   document.getElementById('questionArea').classList.add('fade-in');
   var optArea=document.getElementById('optionsArea');optArea.innerHTML='';
 
-  opts.forEach(function(opt){
-    var isSelected=userAnswers[currentIndex]===opt.letter;
-    var isCorrect=reviewMode&&opt.letter===q.answer;
-    var isWrong=reviewMode&&isSelected&&opt.letter!==q.answer;
+  opts.forEach(function(opt,idx){
+    var displayLetter=String.fromCharCode(65+idx);
+    var origLetter=opt.letter;
+    var isSelected=userAnswers[currentIndex]===origLetter;
+    var isCorrect=reviewMode&&origLetter===q.answer;
+    var isWrong=reviewMode&&isSelected&&origLetter!==q.answer;
     var btn=document.createElement('button');
     var cls='option-btn w-full text-left p-4 rounded-xl border-2 cursor-pointer flex items-start gap-3 ';
     if(reviewMode){if(isCorrect)cls+='border-correct bg-correct-bg';else if(isWrong)cls+='border-wrong bg-wrong-bg';else cls+='border-gray-200 bg-white';}
     else if(isSelected)cls+='border-primary bg-primary/5 shadow-md';
     else cls+='border-gray-200 bg-white hover:border-primary/30 hover:shadow-sm';
     btn.className=cls;
-    if(!reviewMode)btn.onclick=(function(l){return function(){selectOption(l)};})(opt.letter);
+    if(!reviewMode)btn.onclick=(function(l){return function(){selectOption(l)};})(origLetter);
     else{btn.classList.add('disabled');btn.style.cursor='default';}
 
     var circ=document.createElement('span');
@@ -377,7 +408,7 @@ function renderQuestion(){
     else if(reviewMode&&isWrong)lc+='bg-wrong text-white';
     else if(isSelected)lc+='bg-primary text-white';
     else lc+='bg-gray-100 text-ink-light';
-    circ.className=lc;circ.textContent=opt.letter;
+    circ.className=lc;circ.textContent=displayLetter;
 
     var txt=document.createElement('span');txt.className='pt-1 leading-relaxed text-sm md:text-base';txt.textContent=opt.text;
     btn.appendChild(circ);btn.appendChild(txt);
@@ -422,6 +453,28 @@ function toggleMark(){if(markedQuestions.has(currentIndex))markedQuestions.delet
 updateMarkButton();updateQuestionMap();}
 function updateMarkButton(){var m=markedQuestions.has(currentIndex);document.getElementById('markIcon').setAttribute('fill',m?'currentColor':'none');document.getElementById('markText').textContent=m?'已标记':'标记';}
 function toggleQuestionMap(){document.getElementById('questionMap').classList.toggle('hidden');}
+function renderTimeRank(containerId){
+  var list=document.getElementById(containerId);if(!list)return;
+  list.innerHTML="";
+  if(!frozenTimers)return;
+  var times=[];for(var i=0;i<examQuestions.length;i++){times.push({index:i,ms:frozenTimers[i]||0});}
+  times.sort(function(a,b){return b.ms-a.ms;});
+  var maxMs=Math.max.apply(null,times.map(function(t){return t.ms;}))||1;
+  times.forEach(function(item){
+    var q=examQuestions[item.index];
+    var pct=Math.round(item.ms/maxMs*100);
+    var sec=Math.round(item.ms/1000);
+    var isCorrect=userAnswers[item.index]===q.answer;
+    var isUnanswered=userAnswers[item.index]===undefined;
+    var barColor=isUnanswered?"bg-gray-300":isCorrect?"bg-correct":"bg-wrong";
+    var textColor=isUnanswered?"text-ink-muted":isCorrect?"text-correct":"text-wrong";
+    var label=isUnanswered?"—":isCorrect?"✓":"✗";
+    var row=document.createElement("div");
+    row.className="flex items-center gap-3 text-sm";
+    row.innerHTML='<span class="w-12 text-right text-ink-muted shrink-0 font-mono">'+(item.index+1)+'</span><div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden"><div class="'+barColor+' h-full rounded-full transition-all duration-700" style="width:'+pct+'%"></div></div><span class="w-14 text-right font-medium '+textColor+' shrink-0">'+(sec<60?sec+'s':Math.floor(sec/60)+'m'+sec%60+'s')+'</span><span class="w-6 text-center font-bold '+textColor+' shrink-0">'+label+'</span>';
+    list.appendChild(row);
+  });
+}
 
 function renderQuestionMap(){
   var grid=document.getElementById('questionMapGrid');grid.innerHTML='';
@@ -433,7 +486,7 @@ function renderQuestionMap(){
 // Lightweight style update on answer selection - no DOM rebuild
 function updateOptionStyles(){
   var q=examQuestions[currentIndex];
-  var opts=getShuffledOptions(q);
+  var opts=shuffleOptions&&shuffledOptionsCache&&shuffledOptionsCache[currentIndex]?shuffledOptionsCache[currentIndex]:q.options;
   var btns=document.getElementById('optionsArea').children;
   for(var i=0;i<btns.length;i++){
     var btn=btns[i];
@@ -491,7 +544,7 @@ function submitExam(){
   });
   saveMistakeBank(bank);
   var t=examQuestions.length,pct=Math.round(c/t*100);
-  var elapsed=Math.floor((Date.now()-startTime)/1000),em=Math.floor(elapsed/60),es=elapsed%60;
+  frozenTimers={};for(var fi=0;fi<examQuestions.length;fi++){frozenTimers[fi]=questionTimers[fi]||0;}var totalMs=0;for(var ti=0;ti<examQuestions.length;ti++){totalMs+=(frozenTimers[ti]||0);}var elapsed=Math.round(totalMs/1000),em=Math.floor(elapsed/60),es=elapsed%60;
   document.getElementById('scorePercent').textContent=pct+'%';
   document.getElementById('correctCount').textContent=c;
   document.getElementById('wrongCount').textContent=w;
@@ -512,7 +565,7 @@ function submitExam(){
   timeList.innerHTML='';
   var times=[];
   for(var ti=0;ti<examQuestions.length;ti++){
-    var ms=questionTimers[ti]||0;
+    var ms=frozenTimers[ti]||0;
     times.push({index:ti,ms:ms});
   }
   times.sort(function(a,b){return b.ms-a.ms;});
@@ -525,7 +578,7 @@ function submitExam(){
     var isUnanswered=userAnswers[item.index]===undefined;
     var barColor=isUnanswered?'bg-gray-300':isCorrect?'bg-correct':'bg-wrong';
     var textColor=isUnanswered?'text-ink-muted':isCorrect?'text-correct':'text-wrong';
-    var label=isUnanswered?'未答':isCorrect?'✓':'✗';
+    var label=isUnanswered?'—':isCorrect?'✓':'✗';
     var row=document.createElement('div');
     row.className='flex items-center gap-3 text-sm';
     row.innerHTML='<span class="w-12 text-right text-ink-muted shrink-0 font-mono">'+(item.index+1)+'</span><div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden"><div class="'+barColor+' h-full rounded-full transition-all duration-700" style="width:'+pct+'%"></div></div><span class="w-14 text-right font-medium '+textColor+' shrink-0">'+(sec<60?sec+'s':Math.floor(sec/60)+'m'+sec%60+'s')+'</span><span class="w-6 text-center font-bold '+textColor+' shrink-0">'+label+'</span>';
@@ -533,7 +586,7 @@ function submitExam(){
   });
   updateStartScreenMistakes();
 }
-function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();}
+function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();var tr=document.getElementById('timeRankList');if(tr){tr.classList.remove('hidden');renderTimeRank('timeRankList');}}
 function restartExam(){document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.remove('hidden');}
 
 // ===== Mistake Bank (localStorage) =====
@@ -586,7 +639,7 @@ function startMix(){
 }
 
 function startExamWithQuestions(questions,label){
-  examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};questionTimers={};lastQuestionTime=0;markedQuestions=new Set();
+  examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};questionTimers={};lastQuestionTime=0;markedQuestions=new Set();shuffledOptionsCache=null;frozenTimers=null;
   examQuestions=questions;
   document.getElementById('totalNum').textContent=examQuestions.length;
   document.getElementById('partLabel').textContent=label||'';
