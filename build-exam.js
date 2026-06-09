@@ -442,8 +442,8 @@ function displayToOriginal(qi,displayLetter){
 }
 
 // ===== Question Time Tracking =====
-function startQuestionTimer(){lastQuestionTime=Date.now();timedQuestionIndex=currentIndex;}
-function stopQuestionTimer(){if(!reviewMode && timedQuestionIndex>=0 && lastQuestionTime>0){var elapsed=Date.now()-lastQuestionTime;if(!questionTimers[timedQuestionIndex])questionTimers[timedQuestionIndex]=0;questionTimers[timedQuestionIndex]+=elapsed;}lastQuestionTime=0;timedQuestionIndex=-1;}
+function startQuestionTimer(){lastQuestionTime=Date.now();timedQuestionIndex=currentIndex;console.log('[TIMER] start q'+currentIndex);}
+function stopQuestionTimer(){if(!reviewMode && timedQuestionIndex>=0 && lastQuestionTime>0){var elapsed=Date.now()-lastQuestionTime;console.log('[TIMER] stop q'+timedQuestionIndex+' +'+elapsed+'ms');if(!questionTimers[timedQuestionIndex])questionTimers[timedQuestionIndex]=0;questionTimers[timedQuestionIndex]+=elapsed;}lastQuestionTime=0;timedQuestionIndex=-1;}
 function formatMs(ms){
   var s=Math.round(ms/1000);
   if(s<60)return s+'\u79d2';
@@ -668,7 +668,7 @@ function submitExam(){
   });
   saveMistakeBank(bank);
   var t=examQuestions.length,pct=Math.round(c/t*100);
-  stopQuestionTimer();frozenTimers={};for(var fi=0;fi<examQuestions.length;fi++){frozenTimers[fi]=questionTimers[fi]||0;}var totalMs=0;for(var ti=0;ti<examQuestions.length;ti++){totalMs+=(frozenTimers[ti]||0);}var elapsed=Math.round(totalMs/1000),em=Math.floor(elapsed/60),es=elapsed%60;
+  stopQuestionTimer();frozenTimers={};for(var fi=0;fi<examQuestions.length;fi++){frozenTimers[fi]=questionTimers[fi]||0;}console.log('[TIMER] frozenTimers:',JSON.stringify(frozenTimers));var elapsed=Math.round((Date.now()-startTime)/1000),em=Math.floor(elapsed/60),es=elapsed%60;
   document.getElementById('scorePercent').textContent=pct+'%';
   document.getElementById('correctCount').textContent=c;
   document.getElementById('wrongCount').textContent=w;
