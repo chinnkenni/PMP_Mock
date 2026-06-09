@@ -195,15 +195,16 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
     </div>
   </div>
 
-  <div class="mb-8">
-    <label class="flex items-center justify-center gap-3 cursor-pointer select-none">
-      <input type="checkbox" id="shuffleToggle" class="w-4 h-4 accent-primary" onchange="shuffleOptions=this.checked">
-      <span class="text-sm font-medium text-ink-light">打乱答案顺序</span>
-      <span class="text-xs text-ink-muted">（防止记住选项位置）</span>
+  <div class="mb-6">
+    <label class="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 cursor-pointer select-none hover:bg-gray-50 transition-colors">
+      <input type="checkbox" id="shuffleToggle" class="w-5 h-5 accent-primary" onchange="shuffleOptions=this.checked">
+      <div>
+        <span class="text-sm font-semibold text-ink">打乱答案顺序</span>
+        <p class="text-xs text-ink-muted">随机排列 A/B/C/D 选项，避免记住选项位置</p>
+      </div>
     </label>
   </div>
-
-  <!-- Mode buttons -->
+<!-- Mode buttons -->
   <div class="mb-8">
     <label class="block text-sm font-medium text-ink-light mb-3">选择模式</label>
     <div class="grid grid-cols-3 gap-3">
