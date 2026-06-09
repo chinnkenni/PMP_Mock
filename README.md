@@ -1,10 +1,6 @@
 # PMP 模拟考试
 
-一个基于静态 HTML 的 PMP 模拟考试练习工具，支持随机抽题、计时、错题本、每题停留时长统计等功能。
-
-## 在线访问
-
-🔗 [GitHub Pages](https://chinnkenni.github.io/PMP_Mock/)
+PMP 模拟考试练习工具，支持随机抽题、计时、错题本、每题停留时长统计等功能。
 
 ## 功能特性
 
@@ -23,8 +19,6 @@
 pmp-exam-app/
 ├── build-exam.js          # 构建脚本：解析 MD → 生成 docs/index.html
 ├── questions/             # 题目源文件（Markdown）
-│   ├── 第一部分：项目管理基础知识.md
-│   └── 第二部分：1. 整合管理.md
 ├── docs/
 │   └── index.html         # 生成的考试页面（自动生成，勿手动编辑）
 └── README.md
@@ -59,32 +53,9 @@ node build-exam.js
 
 3. 新题目会自动被发现并整合到考试页面中。
 
-## 本地开发
+## 本地运行
 
 ```bash
-# 安装依赖（仅需 Node.js）
 node build-exam.js
-
-# 本地预览
 npx serve docs
 ```
-
-## 部署
-
-### GitHub Pages
-
-项目已配置 GitHub Pages， serving from `/docs` on `main` branch。推送后自动更新。
-
-### Vercel
-
-1. 导入 GitHub 仓库
-2. Framework Preset: **Other**
-3. Output Directory: `docs`
-4. 部署
-
-## 技术栈
-
-- HTML + Tailwind CSS（CDN）
-- Vanilla JavaScript
-- Node.js 构建脚本
-- GitHub Pages / Vercel 部署
