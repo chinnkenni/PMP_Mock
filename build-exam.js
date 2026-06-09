@@ -195,6 +195,14 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
     </div>
   </div>
 
+  <div class="mb-8">
+    <label class="flex items-center justify-center gap-3 cursor-pointer select-none">
+      <input type="checkbox" id="shuffleToggle" class="w-4 h-4 accent-primary" onchange="shuffleOptions=this.checked">
+      <span class="text-sm font-medium text-ink-light">打乱答案顺序</span>
+      <span class="text-xs text-ink-muted">（防止记住选项位置）</span>
+    </label>
+  </div>
+
   <!-- Mode buttons -->
   <div class="mb-8">
     <label class="block text-sm font-medium text-ink-light mb-3">选择模式</label>
@@ -374,8 +382,8 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 var EXAM_PARTS = ${questionsJSON};
 
 // State
-var examQuestions=[], selectedPart='all', selectedQCount=0, currentIndex=0;
-var userAnswers={}, markedQuestions=new Set(), timerInterval=null, timeLeft=0, startTime=null;
+var examQuestions=[], selectedPart='all', selectedQCount=0, currentIndex=0, shuffleOptions=false;
+var userAnswers={}, questionTimers={}, lastQuestionTime=0, markedQuestions=new Set(), timerInterval=null, timeLeft=0, startTime=null;
 var examFinished=false, reviewMode=false;
 
 // Build part selector
@@ -393,6 +401,36 @@ var examFinished=false, reviewMode=false;
   });
 })();
 
+// ===== Shuffle Options Helper =====
+function shuffleArrayCopy(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}
+  return a;
+}
+function getShuffledOptions(q){
+  if(!shuffleOptions)return q.options;
+  var shuffled=shuffleArrayCopy(q.options);
+  return shuffled;
+}
+
+// ===== Question Time Tracking =====
+function startQuestionTimer(){
+  lastQuestionTime=Date.now();
+}
+function stopQuestionTimer(){
+  if(currentIndex>=0 && lastQuestionTime>0){
+    var elapsed=Date.now()-lastQuestionTime;
+    if(!questionTimers[currentIndex])questionTimers[currentIndex]=0;
+    questionTimers[currentIndex]+=elapsed;
+  }
+  lastQuestionTime=Date.now();
+}
+function formatMs(ms){
+  var s=Math.round(ms/1000);
+  if(s<60)return s+'\u79d2';
+  var m=Math.floor(s/60),sec=s%60;
+  return m+'\u5206'+sec+'\u79d2';
+}
 function updateTimeEstimate(){
   var sel=document.querySelector('input[name="part"]:checked').value;
   var pool=[];
@@ -443,14 +481,16 @@ function updateTimerDisplay(){
 }
 
 function renderQuestion(){
+  stopQuestionTimer();startQuestionTimer();
   var q=examQuestions[currentIndex];
+  var opts=getShuffledOptions(q);
   document.getElementById('currentNum').textContent=currentIndex+1;
   document.getElementById('partLabel').textContent=q._partTitle||'';
   document.getElementById('questionText').textContent=(currentIndex+1)+'、'+q.text;
   document.getElementById('questionArea').classList.add('fade-in');
   var optArea=document.getElementById('optionsArea');optArea.innerHTML='';
 
-  q.options.forEach(function(opt){
+  opts.forEach(function(opt){
     var isSelected=userAnswers[currentIndex]===opt.letter;
     var isCorrect=reviewMode&&opt.letter===q.answer;
     var isWrong=reviewMode&&isSelected&&opt.letter!==q.answer;
@@ -525,10 +565,11 @@ function renderQuestionMap(){
 // Lightweight style update on answer selection - no DOM rebuild
 function updateOptionStyles(){
   var q=examQuestions[currentIndex];
+  var opts=getShuffledOptions(q);
   var btns=document.getElementById('optionsArea').children;
   for(var i=0;i<btns.length;i++){
     var btn=btns[i];
-    var letter=q.options[i].letter;
+    var letter=opts[i].letter;
     var isSelected=userAnswers[currentIndex]===letter;
     var cls='option-btn w-full text-left p-4 rounded-xl border-2 cursor-pointer flex items-start gap-3 ';
     if(isSelected)cls+='border-primary bg-primary/5 shadow-md';
@@ -595,6 +636,33 @@ function submitExam(){
   document.getElementById('examScreen').classList.add('hidden');
   document.getElementById('resultScreen').classList.remove('hidden');
   document.getElementById('resultScreen').scrollIntoView({behavior:'smooth'});
+  // Render per-question time details
+  stopQuestionTimer();
+  var timeSection=document.getElementById('timeDetailSection');
+  var timeList=document.getElementById('timeDetailList');
+  timeSection.classList.remove('hidden');
+  timeList.innerHTML='';
+  var times=[];
+  for(var ti=0;ti<examQuestions.length;ti++){
+    var ms=questionTimers[ti]||0;
+    times.push({index:ti,ms:ms});
+  }
+  times.sort(function(a,b){return b.ms-a.ms;});
+  var maxMs=Math.max.apply(null,times.map(function(t){return t.ms;}))||1;
+  times.forEach(function(item){
+    var q=examQuestions[item.index];
+    var pct=Math.round(item.ms/maxMs*100);
+    var sec=Math.round(item.ms/1000);
+    var isCorrect=userAnswers[item.index]===q.answer;
+    var isUnanswered=userAnswers[item.index]===undefined;
+    var barColor=isUnanswered?'bg-gray-300':isCorrect?'bg-correct':'bg-wrong';
+    var textColor=isUnanswered?'text-ink-muted':isCorrect?'text-correct':'text-wrong';
+    var label=isUnanswered?'\u672a\u7b54':isCorrect?'\u2713':'\u2717';
+    var row=document.createElement('div');
+    row.className='flex items-center gap-3 text-sm';
+    row.innerHTML='<span class="w-12 text-right text-ink-muted shrink-0 font-mono">'+(item.index+1)+'</span><div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden"><div class="'+barColor+' h-full rounded-full transition-all duration-700" style="width:'+pct+'%"></div></div><span class="w-14 text-right font-medium '+textColor+' shrink-0">'+(sec<60?sec+'s':Math.floor(sec/60)+'m'+sec%60+'s')+'</span><span class="w-6 text-center font-bold '+textColor+' shrink-0">'+label+'</span>';
+    timeList.appendChild(row);
+  });
   updateStartScreenMistakes();
 }
 function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();}
@@ -650,7 +718,7 @@ function startMix(){
 }
 
 function startExamWithQuestions(questions,label){
-  examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};markedQuestions=new Set();
+  examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};questionTimers={};lastQuestionTime=0;markedQuestions=new Set();
   examQuestions=questions;
   document.getElementById('totalNum').textContent=examQuestions.length;
   document.getElementById('partLabel').textContent=label||'';
