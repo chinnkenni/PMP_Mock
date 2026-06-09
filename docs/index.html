@@ -267,7 +267,7 @@ var EXAM_PARTS = [{"title":"一部分：项目管理基础知识","questions":[{
 // State
 var examQuestions=[], selectedPart='all', selectedQCount=0, currentIndex=0, shuffleOptions=false;
 var userAnswers={}, questionTimers={}, lastQuestionTime=0, markedQuestions=new Set(), timerInterval=null, timeLeft=0, startTime=null;
-var examFinished=false, reviewMode=false, shuffledOptionsCache=null, frozenTimers=null;
+var examFinished=false, reviewMode=false, shuffledOptionsCache=null, frozenTimers=null, timedQuestionIndex=-1;
 
 // Build part selector
 (function(){
@@ -309,17 +309,8 @@ function displayToOriginal(qi,displayLetter){
 }
 
 // ===== Question Time Tracking =====
-function startQuestionTimer(){
-  lastQuestionTime=Date.now();
-}
-function stopQuestionTimer(){
-  if(!reviewMode && currentIndex>=0 && lastQuestionTime>0){
-    var elapsed=Date.now()-lastQuestionTime;
-    if(!questionTimers[currentIndex])questionTimers[currentIndex]=0;
-    questionTimers[currentIndex]+=elapsed;
-  }
-  lastQuestionTime=Date.now();
-}
+function startQuestionTimer(){lastQuestionTime=Date.now();timedQuestionIndex=currentIndex;}
+function stopQuestionTimer(){if(!reviewMode && timedQuestionIndex>=0 && lastQuestionTime>0){var elapsed=Date.now()-lastQuestionTime;if(!questionTimers[timedQuestionIndex])questionTimers[timedQuestionIndex]=0;questionTimers[timedQuestionIndex]+=elapsed;}lastQuestionTime=0;timedQuestionIndex=-1;}
 function formatMs(ms){
   var s=Math.round(ms/1000);
   if(s<60)return s+'秒';
@@ -544,7 +535,7 @@ function submitExam(){
   });
   saveMistakeBank(bank);
   var t=examQuestions.length,pct=Math.round(c/t*100);
-  frozenTimers={};for(var fi=0;fi<examQuestions.length;fi++){frozenTimers[fi]=questionTimers[fi]||0;}var totalMs=0;for(var ti=0;ti<examQuestions.length;ti++){totalMs+=(frozenTimers[ti]||0);}var elapsed=Math.round(totalMs/1000),em=Math.floor(elapsed/60),es=elapsed%60;
+  stopQuestionTimer();frozenTimers={};for(var fi=0;fi<examQuestions.length;fi++){frozenTimers[fi]=questionTimers[fi]||0;}var totalMs=0;for(var ti=0;ti<examQuestions.length;ti++){totalMs+=(frozenTimers[ti]||0);}var elapsed=Math.round(totalMs/1000),em=Math.floor(elapsed/60),es=elapsed%60;
   document.getElementById('scorePercent').textContent=pct+'%';
   document.getElementById('correctCount').textContent=c;
   document.getElementById('wrongCount').textContent=w;
@@ -558,7 +549,6 @@ function submitExam(){
   document.getElementById('resultScreen').classList.remove('hidden');
   document.getElementById('resultScreen').scrollIntoView({behavior:'smooth'});
   // Render per-question time details
-  stopQuestionTimer();
   var timeSection=document.getElementById('timeDetailSection');
   var timeList=document.getElementById('timeDetailList');
   timeSection.classList.remove('hidden');
