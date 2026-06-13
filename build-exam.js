@@ -130,6 +130,11 @@ function buildExam() {
 // ===== 生成 HTML =====
 function generateHTML(parts, totalCount) {
   const questionsJSON = JSON.stringify(parts);
+  const bankVersion = require("crypto")
+    .createHash("sha256")
+    .update(questionsJSON)
+    .digest("hex")
+    .slice(0, 12);
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -153,6 +158,22 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 </style>
 </head>
 <body class="bg-surface min-h-screen font-sans text-ink">
+
+<!-- ========== RESUME SCREEN ========== -->
+<div id="resumeScreen" class="hidden min-h-screen flex items-center justify-center px-4">
+<div class="max-w-md w-full bg-surface-card rounded-2xl shadow-xl p-8 md:p-10 text-center fade-in">
+  <div class="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+    <svg class="w-10 h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+  </div>
+  <p class="text-sm font-medium text-primary mb-2">上次练习还没有完成</p>
+  <h1 class="text-2xl md:text-3xl font-bold text-primary-dark mb-3">继续之前的进度？</h1>
+  <p id="resumeSummary" class="text-base text-ink-light"></p>
+  <p id="resumeSavedAt" class="text-sm text-ink-muted mt-2 mb-8"></p>
+  <button onclick="resumeSavedExam()" class="w-full bg-primary text-white font-semibold py-3 rounded-xl hover:bg-primary-dark transition-colors cursor-pointer shadow-lg shadow-primary/25">继续答题</button>
+  <button onclick="discardSavedExam()" class="w-full mt-3 text-ink-muted font-medium py-2.5 rounded-xl hover:text-wrong hover:bg-wrong-bg transition-colors cursor-pointer">放弃进度，重新选择</button>
+  <p class="text-xs text-ink-muted mt-6">离开期间计时已暂停</p>
+</div>
+</div>
 
 <!-- ========== START SCREEN ========== -->
 <div id="startScreen" class="min-h-screen flex items-center justify-center px-4">
@@ -400,11 +421,116 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 <script>
 // Exam data - generated from md files
 var EXAM_PARTS = ${questionsJSON};
+var QUESTION_BANK_VERSION = '${bankVersion}';
 
 // State
 var examQuestions=[], selectedPart='all', selectedQCount=0, currentIndex=0, shuffleOptions=false;
 var userAnswers={}, questionTimers={}, lastQuestionTime=0, markedQuestions=new Set(), timerInterval=null, timeLeft=0, startTime=null;
 var examFinished=false, reviewMode=false, shuffledOptionsCache=null, frozenTimers=null, timedQuestionIndex=-1;
+var examMode='normal', examLabel='', progressSaveInterval=null;
+
+// ===== Saved Exam Progress =====
+var PROGRESS_KEY='pmp_exam_progress_v1';
+function getSavedExam(){
+  try{
+    var raw=localStorage.getItem(PROGRESS_KEY);
+    if(!raw)return null;
+    var saved=JSON.parse(raw);
+    if(saved.version!==1||saved.bankVersion!==QUESTION_BANK_VERSION||!Array.isArray(saved.examQuestions)||saved.examQuestions.length===0){
+      localStorage.removeItem(PROGRESS_KEY);
+      return null;
+    }
+    return saved;
+  }catch(e){return null;}
+}
+function clearSavedExam(){
+  try{localStorage.removeItem(PROGRESS_KEY);}catch(e){}
+  updateResumeCard();
+}
+function getModeLabel(mode){
+  if(mode==='drill')return '\u9519\u9898\u4e13\u9879';
+  if(mode==='mix')return '\u6df7\u5408\u7ec3\u4e60';
+  return '\u666e\u901a\u7ec3\u4e60';
+}
+function saveExamProgress(){
+  if(examFinished||reviewMode||!examQuestions.length||document.getElementById('examScreen').classList.contains('hidden'))return;
+  stopQuestionTimer();
+  var snapshot={
+    version:1,
+    bankVersion:QUESTION_BANK_VERSION,
+    savedAt:Date.now(),
+    examQuestions:examQuestions,
+    currentIndex:currentIndex,
+    userAnswers:userAnswers,
+    markedQuestions:Array.from(markedQuestions),
+    questionTimers:questionTimers,
+    timeLeft:timeLeft,
+    elapsedMs:Math.max(0,Date.now()-startTime),
+    shuffleOptions:shuffleOptions,
+    shuffledOptionsCache:shuffledOptionsCache,
+    examMode:examMode,
+    examLabel:examLabel
+  };
+  try{localStorage.setItem(PROGRESS_KEY,JSON.stringify(snapshot));}catch(e){}
+  startQuestionTimer();
+}
+function updateResumeCard(){
+  var resumeScreen=document.getElementById('resumeScreen');
+  var startScreen=document.getElementById('startScreen');
+  if(!resumeScreen||!startScreen)return;
+  var saved=getSavedExam();
+  if(!saved){
+    resumeScreen.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+    return;
+  }
+  var answered=Object.keys(saved.userAnswers||{}).length;
+  document.getElementById('resumeSummary').textContent=getModeLabel(saved.examMode)+' \u00b7 \u5df2\u7b54 '+answered+' / '+saved.examQuestions.length+' \u9898';
+  document.getElementById('resumeSavedAt').textContent='\u4e0a\u6b21\u4fdd\u5b58\uff1a'+new Date(saved.savedAt).toLocaleString();
+  startScreen.classList.add('hidden');
+  resumeScreen.classList.remove('hidden');
+}
+function discardSavedExam(){
+  if(!confirm('\u786e\u5b9a\u653e\u5f03\u4e0a\u6b21\u672a\u5b8c\u6210\u7684\u7ec3\u4e60\u5417\uff1f'))return;
+  clearSavedExam();
+}
+function confirmReplaceSavedExam(){
+  if(!getSavedExam())return true;
+  if(!confirm('\u5f00\u59cb\u65b0\u7ec3\u4e60\u5c06\u8986\u76d6\u4e0a\u6b21\u672a\u5b8c\u6210\u7684\u8fdb\u5ea6\uff0c\u786e\u5b9a\u7ee7\u7eed\u5417\uff1f'))return false;
+  clearSavedExam();
+  return true;
+}
+function beginProgressSaving(){
+  clearInterval(progressSaveInterval);
+  progressSaveInterval=setInterval(saveExamProgress,5000);
+  saveExamProgress();
+}
+function resumeSavedExam(){
+  var saved=getSavedExam();
+  if(!saved){updateResumeCard();return;}
+  examFinished=false;reviewMode=false;
+  examQuestions=saved.examQuestions;
+  currentIndex=Math.min(Math.max(0,saved.currentIndex||0),examQuestions.length-1);
+  userAnswers=saved.userAnswers||{};
+  markedQuestions=new Set(saved.markedQuestions||[]);
+  questionTimers=saved.questionTimers||{};
+  timeLeft=Math.max(1,saved.timeLeft||1);
+  shuffleOptions=!!saved.shuffleOptions;
+  shuffledOptionsCache=saved.shuffledOptionsCache||null;
+  examMode=saved.examMode||'normal';
+  examLabel=saved.examLabel||'';
+  startTime=Date.now()-(saved.elapsedMs||0);
+  lastQuestionTime=0;timedQuestionIndex=-1;frozenTimers=null;
+  document.getElementById('shuffleToggle').checked=shuffleOptions;
+  document.getElementById('totalNum').textContent=examQuestions.length;
+  document.getElementById('resumeScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('examScreen').classList.remove('hidden');
+  document.getElementById('resultScreen').classList.add('hidden');
+  document.getElementById('mistakeBookScreen').classList.add('hidden');
+  var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');
+  startTimer();renderQuestion();renderQuestionMap();beginProgressSaving();
+}
 
 // Build part selector
 (function(){
@@ -476,6 +602,8 @@ function setQCount(n){
 function shuffleArray(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
 
 function startExam(){
+  if(!confirmReplaceSavedExam())return;
+  examMode='normal';examLabel='';
   examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};markedQuestions=new Set();shuffledOptionsCache=null;frozenTimers=null;
   var sel=document.querySelector('input[name="part"]:checked').value;
   var pool=[];
@@ -494,7 +622,7 @@ function startExam(){
   var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');
   questionTimers={};lastQuestionTime=0;
   if(shuffleOptions)buildShuffledCache();else shuffledOptionsCache=null;
-  startTimer();renderQuestion();renderQuestionMap();
+  startTimer();renderQuestion();renderQuestionMap();beginProgressSaving();
 }
 
 function startTimer(){clearInterval(timerInterval);updateTimerDisplay();timerInterval=setInterval(function(){timeLeft--;updateTimerDisplay();if(timeLeft<=0){clearInterval(timerInterval);submitExam();}},1000);}
@@ -572,14 +700,14 @@ updateMarkButton();
   updateQuestionMap();
 }
 
-function selectOption(l){if(examFinished||reviewMode)return;if(userAnswers[currentIndex]===l)delete userAnswers[currentIndex];else userAnswers[currentIndex]=l;updateOptionStyles();updateQuestionMap();document.getElementById('progressBar').style.width=(Object.keys(userAnswers).length/examQuestions.length*100).toFixed(1)+'%';}
-function prevQuestion(){if(currentIndex>0){currentIndex--;renderQuestion();}}
-function nextQuestion(){if(currentIndex<examQuestions.length-1){currentIndex++;renderQuestion();}else if(reviewMode){document.getElementById('examScreen').classList.add('hidden');document.getElementById('resultScreen').classList.remove('hidden');}else{confirmSubmit();}}
+function selectOption(l){if(examFinished||reviewMode)return;if(userAnswers[currentIndex]===l)delete userAnswers[currentIndex];else userAnswers[currentIndex]=l;updateOptionStyles();updateQuestionMap();document.getElementById('progressBar').style.width=(Object.keys(userAnswers).length/examQuestions.length*100).toFixed(1)+'%';saveExamProgress();}
+function prevQuestion(){if(currentIndex>0){currentIndex--;renderQuestion();saveExamProgress();}}
+function nextQuestion(){if(currentIndex<examQuestions.length-1){currentIndex++;renderQuestion();saveExamProgress();}else if(reviewMode){document.getElementById('examScreen').classList.add('hidden');document.getElementById('resultScreen').classList.remove('hidden');}else{confirmSubmit();}}
 function toggleMark(){if(markedQuestions.has(currentIndex))markedQuestions.delete(currentIndex);else markedQuestions.add(currentIndex);// Update top-right submit button based on mode
   var topBtn=document.getElementById('topSubmitBtn');
   if(reviewMode){topBtn.innerHTML='<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>返回结果';topBtn.onclick=function(){document.getElementById('examScreen').classList.add('hidden');document.getElementById('resultScreen').classList.remove('hidden');};}
   else{topBtn.innerHTML='<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>交卷';topBtn.onclick=function(){confirmSubmit();};}
-updateMarkButton();updateQuestionMap();}
+updateMarkButton();updateQuestionMap();saveExamProgress();}
 function updateMarkButton(){var m=markedQuestions.has(currentIndex);document.getElementById('markIcon').setAttribute('fill',m?'currentColor':'none');document.getElementById('markText').textContent=m?'已标记':'标记';}
 function toggleQuestionMap(){document.getElementById('questionMap').classList.toggle('hidden');}
 function renderTimeRank(containerId){
@@ -607,7 +735,7 @@ function renderTimeRank(containerId){
 
 function renderQuestionMap(){
   var grid=document.getElementById('questionMapGrid');grid.innerHTML='';
-  examQuestions.forEach(function(q,i){var btn=document.createElement('button');btn.className='w-10 h-10 rounded-lg text-xs font-bold cursor-pointer transition-all duration-200 hover:scale-110 ';btn.textContent=i+1;btn.onclick=(function(idx){return function(){currentIndex=idx;renderQuestion();};})(i);grid.appendChild(btn);});
+  examQuestions.forEach(function(q,i){var btn=document.createElement('button');btn.className='w-10 h-10 rounded-lg text-xs font-bold cursor-pointer transition-all duration-200 hover:scale-110 ';btn.textContent=i+1;btn.onclick=(function(idx){return function(){currentIndex=idx;renderQuestion();saveExamProgress();};})(i);grid.appendChild(btn);});
   updateQuestionMap();
 }
 
@@ -652,7 +780,7 @@ function confirmSubmit(){
 function closeModal(){document.getElementById('confirmModal').classList.add('hidden');}
 
 function submitExam(){
-  clearInterval(timerInterval);examFinished=true;closeModal();
+  clearInterval(timerInterval);clearInterval(progressSaveInterval);examFinished=true;closeModal();clearSavedExam();
   var c=0,w=0,u=0;
   examQuestions.forEach(function(q,i){if(userAnswers[i]===undefined)u++;else if(userAnswers[i]===q.answer)c++;else w++;});
   // Save wrong/unanswered to mistake bank
@@ -715,7 +843,7 @@ function submitExam(){
   updateStartScreenMistakes();
 }
 function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();var tr=document.getElementById('timeRankList');if(tr){tr.classList.remove('hidden');renderTimeRank('timeRankList');}}
-function restartExam(){document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.remove('hidden');var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');}
+function restartExam(){document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.remove('hidden');var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');updateResumeCard();}
 
 // ===== Mistake Bank (localStorage) =====
 var MISTAKE_KEY='pmp_mistake_bank';
@@ -741,9 +869,8 @@ function updateStartScreenMistakes(){
   if(mixBtn){mixBtn.disabled=count===0;if(count>0)mixBtn.classList.remove('opacity-40','cursor-not-allowed');else mixBtn.classList.add('opacity-40','cursor-not-allowed');}
 }
 
-var examMode='normal';
-
 function startDrill(){
+  if(!confirmReplaceSavedExam())return;
   examMode='drill';
   var bank=getMistakeBank();
   if(bank.length===0)return;
@@ -752,6 +879,7 @@ function startDrill(){
 }
 
 function startMix(){
+  if(!confirmReplaceSavedExam())return;
   examMode='mix';
   var sel=document.querySelector('input[name="part"]:checked').value;
   var scopePool=[];
@@ -772,6 +900,7 @@ function startMix(){
 }function startExamWithQuestions(questions,label){
   examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};questionTimers={};lastQuestionTime=0;markedQuestions=new Set();shuffledOptionsCache=null;frozenTimers=null;
   examQuestions=questions;
+  examLabel=label||'';
   document.getElementById('totalNum').textContent=examQuestions.length;
   document.getElementById('partLabel').textContent=label||'';
   timeLeft=Math.max(10,Math.ceil(examQuestions.length*1.5))*60;
@@ -781,7 +910,8 @@ function startMix(){
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('mistakeBookScreen').classList.add('hidden');
   var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');
-  startTimer();renderQuestion();renderQuestionMap();
+  if(shuffleOptions)buildShuffledCache();
+  startTimer();renderQuestion();renderQuestionMap();beginProgressSaving();
 }
 
 function showMistakeBook(){
@@ -817,7 +947,27 @@ function confirmClearMistakes(){document.getElementById('clearConfirmModal').cla
 function doClearMistakes(){clearMistakeBank();document.getElementById('clearConfirmModal').classList.add('hidden');renderMistakeBook();}
 
 updateStartScreenMistakes();
-updateTimeEstimate();// Keyboard shortcuts
+updateResumeCard();
+updateTimeEstimate();
+
+var hiddenAt=0;
+document.addEventListener('visibilitychange',function(){
+  if(examFinished||reviewMode||!examQuestions.length||document.getElementById('examScreen').classList.contains('hidden'))return;
+  if(document.hidden){
+    saveExamProgress();
+    stopQuestionTimer();
+    clearInterval(timerInterval);
+    hiddenAt=Date.now();
+  }else if(hiddenAt){
+    startTime+=Date.now()-hiddenAt;
+    hiddenAt=0;
+    startTimer();
+    startQuestionTimer();
+  }
+});
+window.addEventListener('pagehide',saveExamProgress);
+
+// Keyboard shortcuts
 document.addEventListener('keydown',function(e){
   if(document.getElementById('examScreen').classList.contains('hidden'))return;
   if(e.key==='ArrowLeft')prevQuestion();else if(e.key==='ArrowRight')nextQuestion();
