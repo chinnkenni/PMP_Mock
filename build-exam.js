@@ -245,6 +245,10 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
       <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     </div>
   </div>
+
+  <p class="text-xs leading-relaxed text-ink-muted">
+    习题来自慧翔天地国际教育中心，版权所有，仅供学习使用。
+  </p>
 </div>
 </div>
 
