@@ -443,9 +443,9 @@ function getSavedExam(){
     return saved;
   }catch(e){return null;}
 }
-function clearSavedExam(){
+function clearSavedExam(refreshHome){
   try{localStorage.removeItem(PROGRESS_KEY);}catch(e){}
-  updateResumeCard();
+  if(refreshHome!==false)updateResumeCard();
 }
 function getModeLabel(mode){
   if(mode==='drill')return '\u9519\u9898\u4e13\u9879';
@@ -780,7 +780,7 @@ function confirmSubmit(){
 function closeModal(){document.getElementById('confirmModal').classList.add('hidden');}
 
 function submitExam(){
-  clearInterval(timerInterval);clearInterval(progressSaveInterval);examFinished=true;closeModal();clearSavedExam();
+  clearInterval(timerInterval);clearInterval(progressSaveInterval);examFinished=true;closeModal();clearSavedExam(false);
   var c=0,w=0,u=0;
   examQuestions.forEach(function(q,i){if(userAnswers[i]===undefined)u++;else if(userAnswers[i]===q.answer)c++;else w++;});
   // Save wrong/unanswered to mistake bank
@@ -812,6 +812,9 @@ function submitExam(){
   sc.style.stroke=pct>=80?'#22C55E':pct>=60?'#F59E0B':'#DC2626';
   document.getElementById('scoreEmoji').textContent=pct>=90?'\u{1F389}':pct>=80?'\u{1F44F}':pct>=60?'\u{1F4AA}':'\u{1F4DA}';
   document.getElementById('examScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('resumeScreen').classList.add('hidden');
+  document.getElementById('mistakeBookScreen').classList.add('hidden');
   document.getElementById('resultScreen').classList.remove('hidden');
   document.getElementById('resultScreen').scrollIntoView({behavior:'smooth'});
   // Render per-question time details
@@ -842,7 +845,7 @@ function submitExam(){
   });
   updateStartScreenMistakes();
 }
-function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();var tr=document.getElementById('timeRankList');if(tr){tr.classList.remove('hidden');renderTimeRank('timeRankList');}}
+function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.add('hidden');document.getElementById('resumeScreen').classList.add('hidden');document.getElementById('mistakeBookScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();var tr=document.getElementById('timeRankList');if(tr){tr.classList.remove('hidden');renderTimeRank('timeRankList');}}
 function restartExam(){document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.remove('hidden');var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');updateResumeCard();}
 
 // ===== Mistake Bank (localStorage) =====
