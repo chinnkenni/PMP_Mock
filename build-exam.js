@@ -8,6 +8,25 @@ const path = require("path");
 // ===== 配置 =====
 const MD_DIR = path.join(__dirname, "questions");
 const OUTPUT = path.join(__dirname, "docs", "index.html");
+const PART_ORDER = { 一: 1, 二: 2, 三: 3, 四: 4 };
+
+function getQuestionFileOrder(fileName) {
+  const partMatch = fileName.match(/^第([一二三四])部分/);
+  const chapterMatch = fileName.match(/：\s*(\d+)[.．]/);
+  return {
+    part: partMatch ? PART_ORDER[partMatch[1]] || 99 : 99,
+    chapter: chapterMatch ? parseInt(chapterMatch[1], 10) : 0,
+    name: fileName,
+  };
+}
+
+function compareQuestionFiles(a, b) {
+  const ka = getQuestionFileOrder(a);
+  const kb = getQuestionFileOrder(b);
+  if (ka.part !== kb.part) return ka.part - kb.part;
+  if (ka.chapter !== kb.chapter) return ka.chapter - kb.chapter;
+  return ka.name.localeCompare(kb.name, "zh-CN");
+}
 
 // ===== 解析单个 md 文件 =====
 function parseMD(filePath) {
@@ -87,7 +106,6 @@ function parseMD(filePath) {
   // 从文件名提取标题
   const title = path
     .basename(filePath, ".md")
-    .replace(/^[第]/, "")
     .trim();
 
   return {
@@ -101,7 +119,7 @@ function buildExam() {
   const mdFiles = fs
     .readdirSync(MD_DIR)
     .filter((f) => f.endsWith(".md"))
-    .sort()
+    .sort(compareQuestionFiles)
     .map((f) => path.join(MD_DIR, f));
 
   console.log("Found " + mdFiles.length + " md file(s):");
@@ -112,6 +130,10 @@ function buildExam() {
 
   mdFiles.forEach((file) => {
     const part = parseMD(file);
+    part.questions.forEach((question) => {
+      question._partTitle = part.title;
+      question._questionKey = `${part.title}#${question.number}`;
+    });
     console.log(
       "  -> " + part.questions.length + " valid questions from " + path.basename(file)
     );
@@ -155,15 +177,21 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 @media(prefers-reduced-motion:reduce){.fade-in,.pulse-glow{animation:none}}
 .option-btn{transition:all 200ms ease}.option-btn:hover:not(.disabled){transform:translateX(4px)}
 .timer-warning{animation:pulseGlow 1s ease-in-out infinite;color:#DC2626!important}.timer-warning svg{color:#DC2626!important}
+@supports(height:100dvh){.min-h-screen{min-height:100dvh}}
+@media(max-width:640px){
+  body{-webkit-text-size-adjust:100%}
+  .option-btn:hover:not(.disabled){transform:none}
+  button,select{touch-action:manipulation}
+}
 </style>
 </head>
 <body class="bg-surface min-h-screen font-sans text-ink">
 
 <!-- ========== RESUME SCREEN ========== -->
-<div id="resumeScreen" class="hidden min-h-screen flex items-center justify-center px-4">
-<div class="max-w-md w-full bg-surface-card rounded-2xl shadow-xl p-8 md:p-10 text-center fade-in">
-  <div class="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-    <svg class="w-10 h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+<div id="resumeScreen" class="hidden min-h-screen flex items-start md:items-center justify-center px-3 md:px-4 py-4 md:py-0">
+<div class="max-w-md w-full bg-surface-card rounded-2xl shadow-xl p-5 md:p-10 text-center fade-in">
+  <div class="w-14 h-14 md:w-20 md:h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 md:mb-6">
+    <svg class="w-7 h-7 md:w-10 md:h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
   </div>
   <p class="text-sm font-medium text-primary mb-2">上次练习还没有完成</p>
   <h1 class="text-2xl md:text-3xl font-bold text-primary-dark mb-3">继续之前的进度？</h1>
@@ -176,14 +204,14 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 </div>
 
 <!-- ========== START SCREEN ========== -->
-<div id="startScreen" class="min-h-screen flex items-center justify-center px-4">
-<div class="max-w-lg w-full bg-surface-card rounded-2xl shadow-xl p-8 md:p-12 text-center fade-in">
-  <div class="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-    <svg class="w-10 h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5"/></svg>
+<div id="startScreen" class="min-h-screen flex items-start md:items-center justify-center px-3 md:px-4 py-3 md:py-6">
+<div class="max-w-xl w-full bg-surface-card rounded-2xl shadow-xl p-4 md:p-10 text-center fade-in">
+  <div class="w-14 h-14 md:w-20 md:h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3 md:mb-6">
+    <svg class="w-7 h-7 md:w-10 md:h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5"/></svg>
   </div>
-  <h1 class="text-3xl md:text-4xl font-bold text-primary-dark mb-3">PMP 模拟考试</h1>
-  <p class="text-ink-light text-lg mb-2" id="examSubtitle">全部题库</p>
-  <div class="flex items-center justify-center gap-6 text-sm text-ink-muted mb-8">
+  <h1 class="text-2xl md:text-4xl font-bold text-primary-dark mb-2 md:mb-3">PMP 模拟考试</h1>
+  <p class="text-ink-light text-base md:text-lg mb-2" id="examSubtitle">练习题库</p>
+  <div class="flex items-center justify-center gap-3 md:gap-6 text-xs md:text-sm text-ink-muted mb-5 md:mb-8">
     <span class="flex items-center gap-1.5">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
       <span id="totalBadge">${totalCount}</span> 道题
@@ -194,30 +222,56 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
     </span>
   </div>
 
-  <!-- Part selector -->
-  <div class="mb-6">
-    <label class="block text-sm font-medium text-ink-light mb-3">选择考试范围</label>
-    <div class="flex flex-col gap-2" id="partSelector">
-      <label class="flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5 cursor-pointer transition-colors hover:bg-primary/10">
-        <input type="radio" name="part" value="all" checked class="accent-primary">
-        <span class="text-sm font-medium">全部题目 (${totalCount}题)</span>
-      </label>
+  <!-- Bank and scope selector -->
+  <div class="mb-4 md:mb-6 text-left">
+    <label class="block text-sm font-medium text-ink-light mb-3 text-center">选择题库与范围</label>
+    <div class="rounded-2xl border border-primary/15 bg-primary/5 p-3 md:p-4">
+      <div class="flex items-center justify-between gap-3 mb-3 md:mb-4">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 md:w-10 md:h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4 md:w-5 md:h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-ink">练习题库</p>
+          </div>
+        </div>
+        <span class="shrink-0 text-xs font-semibold text-primary bg-white border border-primary/15 rounded-full px-3 py-1">当前</span>
+      </div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-medium text-ink-muted">考试范围</span>
+        <span id="scopeCountText" class="text-xs font-semibold text-primary">${totalCount}题可选</span>
+      </div>
+      <div id="scopeTabs" class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 sm:grid sm:grid-cols-5 sm:overflow-visible"></div>
+      <div id="chapterPicker" class="hidden mt-3">
+        <select id="chapterSelect" class="w-full rounded-xl border border-primary/20 bg-white px-3 py-2.5 text-sm font-medium text-ink outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Study progress -->
+  <div id="studyProgressCard" class="hidden mb-4 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-left">
+    <div class="flex items-center justify-between gap-3">
+      <p id="studyProgressText" class="text-xs text-emerald-800 font-medium truncate">学习进度</p>
+      <span id="studyProgressPercent" class="shrink-0 text-xs font-bold text-emerald-700">0%</span>
+    </div>
+    <div class="h-1 rounded-full bg-white overflow-hidden mt-2">
+      <div id="studyProgressBar" class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width:0%"></div>
     </div>
   </div>
 
   <!-- Question count -->
-  <div class="mb-8">
+  <div class="mb-5 md:mb-8">
     <label class="block text-sm font-medium text-ink-light mb-3">选择题数</label>
-    <div class="flex items-center justify-center gap-3 flex-wrap">
-      <button onclick="setQCount(10)" class="qcount-btn px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="10">10 题</button>
-      <button onclick="setQCount(20)" class="qcount-btn px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="20">20 题</button>
-      <button onclick="setQCount(30)" class="qcount-btn px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="30">30 题</button>
-      <button onclick="setQCount(0)" class="qcount-btn px-4 py-2 rounded-lg border-2 border-primary text-sm font-medium bg-primary/5 cursor-pointer hover:border-primary/50 transition-colors active" data-count="0">全部</button>
+    <div class="grid grid-cols-4 gap-2">
+      <button onclick="setQCount(10)" class="qcount-btn min-h-11 px-2 md:px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="10">10 题</button>
+      <button onclick="setQCount(20)" class="qcount-btn min-h-11 px-2 md:px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="20">20 题</button>
+      <button onclick="setQCount(30)" class="qcount-btn min-h-11 px-2 md:px-4 py-2 rounded-lg border-2 border-primary/20 text-sm font-medium cursor-pointer hover:border-primary/50 transition-colors" data-count="30">30 题</button>
+      <button onclick="setQCount(0)" class="qcount-btn min-h-11 px-2 md:px-4 py-2 rounded-lg border-2 border-primary text-sm font-medium bg-primary/5 cursor-pointer hover:border-primary/50 transition-colors active" data-count="0">全部</button>
     </div>
   </div>
 
-  <div class="mb-6">
-    <label class="flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 bg-white shadow-sm cursor-pointer select-none hover:shadow-md transition-all">
+  <div class="mb-5 md:mb-6">
+    <label class="flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-2xl border-2 border-gray-100 bg-white shadow-sm cursor-pointer select-none hover:shadow-md transition-all">
       <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
         <svg class="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       </div>
@@ -233,18 +287,18 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
     </label>
   </div>
 <!-- Mode buttons -->
-  <div class="mb-8">
+  <div class="mb-5 md:mb-8">
     <label class="block text-sm font-medium text-ink-light mb-3">选择模式</label>
-    <div class="grid grid-cols-3 gap-3">
-      <button onclick="startExam()" class="bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-primary/25 flex flex-col items-center gap-1">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+      <button onclick="startExam()" class="bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-primary/25 flex flex-row sm:flex-col justify-center items-center gap-2 sm:gap-1">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
         <span class="text-sm">普通练习</span>
       </button>
-      <button id="drillBtn" onclick="startDrill()" class="bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/25 flex flex-col items-center gap-1">
+      <button id="drillBtn" onclick="startDrill()" class="bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-amber-500/25 flex flex-row sm:flex-col justify-center items-center gap-2 sm:gap-1">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
         <span class="text-sm">错题专项</span>
       </button>
-      <button id="mixBtn" onclick="startMix()" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-purple-600/25 flex flex-col items-center gap-1">
+      <button id="mixBtn" onclick="startMix()" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-purple-600/25 flex flex-row sm:flex-col justify-center items-center gap-2 sm:gap-1">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
         <span class="text-sm">混合练习</span>
       </button>
@@ -259,8 +313,8 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
           <svg class="w-5 h-5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
         </div>
         <div class="text-left">
-          <p class="text-sm font-semibold text-amber-800">错题本</p>
-          <p class="text-xs text-amber-600">共 <span id="mistakeCountText">0</span> 道错题待复习</p>
+          <p class="text-sm font-semibold text-amber-800">错题记录</p>
+          <p class="text-xs text-amber-600">共 <span id="mistakeCountText">0</span> 道题有错误记录</p>
         </div>
       </div>
       <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
@@ -276,7 +330,7 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 <!-- ========== EXAM SCREEN ========== -->
 <div id="examScreen" class="hidden min-h-screen">
 <header class="sticky top-0 z-50 bg-surface-card/95 backdrop-blur-sm border-b border-primary/10 shadow-sm">
-  <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+  <div class="max-w-4xl mx-auto px-3 md:px-4 py-2.5 md:py-3 flex items-center justify-between">
     <span class="text-sm font-medium text-ink-light">第 <span id="currentNum" class="text-primary font-bold">1</span> / <span id="totalNum">${totalCount}</span> 题</span>
     <div id="timerDisplay" class="flex items-center gap-1.5 text-sm font-mono font-semibold text-primary">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -290,25 +344,26 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
   <div class="h-1 bg-primary/10"><div id="progressBar" class="h-full bg-gradient-to-r from-primary to-primary-light transition-all duration-500 ease-out" style="width:0%"></div></div>
 </header>
 
-<main class="max-w-4xl mx-auto px-4 py-6 md:py-10">
-  <div id="questionArea" class="bg-surface-card rounded-2xl shadow-md p-6 md:p-10 fade-in">
+<main class="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-10 pb-28 md:pb-10">
+  <div id="questionArea" class="bg-surface-card rounded-2xl shadow-md p-4 md:p-10 fade-in">
     <p id="partLabel" class="text-xs text-primary-light font-medium mb-3"></p>
-    <h2 id="questionText" class="text-lg md:text-xl font-medium leading-relaxed mb-8"></h2>
-    <div id="optionsArea" class="space-y-3"></div>
+    <div id="questionHistory" class="hidden mb-4 rounded-xl border border-primary/10 bg-primary/5 px-3 py-2 text-xs text-ink-light"></div>
+    <h2 id="questionText" class="text-base md:text-xl font-medium leading-relaxed mb-5 md:mb-8"></h2>
+    <div id="optionsArea" class="space-y-2.5 md:space-y-3"></div>
     <div id="explanationArea" class="hidden mt-6 p-4 rounded-xl bg-primary/5 border border-primary/10">
       <p id="explanationText" class="text-sm text-ink-light leading-relaxed"></p>
     </div>
   </div>
 
-  <div class="flex items-center justify-between mt-6">
-    <button id="prevBtn" onclick="prevQuestion()" class="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-primary/20 text-primary font-medium hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+  <div class="fixed md:static bottom-0 left-0 right-0 z-40 bg-surface-card/95 md:bg-transparent backdrop-blur-sm md:backdrop-blur-0 border-t md:border-t-0 border-primary/10 px-3 md:px-0 pt-3 md:pt-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-0 mt-6 grid grid-cols-3 gap-2">
+    <button id="prevBtn" onclick="prevQuestion()" class="flex items-center justify-center gap-1.5 px-2 md:px-5 py-3 md:py-2.5 rounded-xl border border-primary/20 text-primary text-sm md:text-base font-medium hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>上一题
     </button>
-    <button id="markBtn" onclick="toggleMark()" class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-yellow-400/40 text-yellow-600 font-medium hover:bg-yellow-50 transition-colors cursor-pointer" title="标记此题">
+    <button id="markBtn" onclick="toggleMark()" class="flex items-center justify-center gap-1.5 px-2 md:px-4 py-3 md:py-2.5 rounded-xl border border-yellow-400/40 text-yellow-600 text-sm md:text-base font-medium hover:bg-yellow-50 transition-colors cursor-pointer" title="标记此题">
       <svg id="markIcon" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
       <span id="markText">标记</span>
     </button>
-    <button id="nextBtn" onclick="nextQuestion()" class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white font-medium hover:bg-primary-dark transition-colors cursor-pointer">
+    <button id="nextBtn" onclick="nextQuestion()" class="flex items-center justify-center gap-1.5 px-2 md:px-5 py-3 md:py-2.5 rounded-xl bg-primary text-white text-sm md:text-base font-medium hover:bg-primary-dark transition-colors cursor-pointer">
       下一题<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     </button>
   </div>
@@ -318,12 +373,14 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>题目导航
     </button>
   </div>
-  <div id="questionMap" class="hidden mt-4 bg-surface-card rounded-2xl shadow-md p-6 fade-in">
+  <div id="questionMap" class="hidden mt-4 bg-surface-card rounded-2xl shadow-md p-4 md:p-6 fade-in">
     <div class="flex flex-wrap gap-2" id="questionMapGrid"></div>
     <div id="timeRankList" class="space-y-2 mt-4 hidden"></div>
-    <div class="flex items-center gap-4 mt-4 text-xs text-ink-muted">
+    <div class="flex items-center gap-3 md:gap-4 mt-4 text-xs text-ink-muted flex-wrap">
       <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-primary inline-block"></span>已答</span>
       <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-yellow-400 inline-block"></span>标记</span>
+      <span class="flex items-center gap-1"><span class="w-3 h-3 rounded border border-emerald-200 bg-emerald-50 inline-block"></span>练过</span>
+      <span class="flex items-center gap-1"><span class="w-3 h-3 rounded border border-amber-200 bg-amber-50 inline-block"></span>薄弱</span>
       <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-gray-200 inline-block"></span>未答</span>
     </div>
   </div>
@@ -331,41 +388,41 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 </div>
 
 <!-- ========== RESULT SCREEN ========== -->
-<div id="resultScreen" class="hidden min-h-screen flex items-center justify-center px-4 py-10">
+<div id="resultScreen" class="hidden min-h-screen flex items-start md:items-center justify-center px-3 md:px-4 py-4 md:py-10">
 <div class="max-w-2xl w-full fade-in">
-  <div class="bg-surface-card rounded-2xl shadow-xl p-8 md:p-12 text-center mb-6">
-    <div id="scoreEmoji" class="text-6xl mb-4"></div>
-    <h2 class="text-2xl font-bold text-ink mb-2">考试结果</h2>
-    <div class="my-8">
-      <div class="relative w-40 h-40 mx-auto">
+  <div class="bg-surface-card rounded-2xl shadow-xl p-5 md:p-12 text-center mb-4 md:mb-6">
+    <div id="scoreEmoji" class="text-4xl md:text-6xl mb-3 md:mb-4"></div>
+    <h2 class="text-xl md:text-2xl font-bold text-ink mb-2">考试结果</h2>
+    <div class="my-5 md:my-8">
+      <div class="relative w-32 h-32 md:w-40 md:h-40 mx-auto">
         <svg class="w-full h-full -rotate-90" viewBox="0 0 120 120">
           <circle cx="60" cy="60" r="52" fill="none" stroke="#E0E7FF" stroke-width="8"/>
           <circle id="scoreCircle" cx="60" cy="60" r="52" fill="none" stroke="#4F46E5" stroke-width="8" stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73" style="transition:stroke-dashoffset 1.5s ease-out"/>
         </svg>
         <div class="absolute inset-0 flex flex-col items-center justify-center">
-          <span id="scorePercent" class="text-4xl font-bold text-primary">0%</span>
+          <span id="scorePercent" class="text-3xl md:text-4xl font-bold text-primary">0%</span>
           <span class="text-xs text-ink-muted">正确率</span>
         </div>
       </div>
     </div>
-    <div class="grid grid-cols-3 gap-4 text-center">
-      <div class="bg-correct-bg rounded-xl p-4"><p id="correctCount" class="text-2xl font-bold text-correct">0</p><p class="text-xs text-ink-muted mt-1">正确</p></div>
-      <div class="bg-wrong-bg rounded-xl p-4"><p id="wrongCount" class="text-2xl font-bold text-wrong">0</p><p class="text-xs text-ink-muted mt-1">错误</p></div>
-      <div class="bg-primary/5 rounded-xl p-4"><p id="unansweredCount" class="text-2xl font-bold text-primary">0</p><p class="text-xs text-ink-muted mt-1">未答</p></div>
+    <div class="grid grid-cols-3 gap-2 md:gap-4 text-center">
+      <div class="bg-correct-bg rounded-xl p-3 md:p-4"><p id="correctCount" class="text-xl md:text-2xl font-bold text-correct">0</p><p class="text-xs text-ink-muted mt-1">正确</p></div>
+      <div class="bg-wrong-bg rounded-xl p-3 md:p-4"><p id="wrongCount" class="text-xl md:text-2xl font-bold text-wrong">0</p><p class="text-xs text-ink-muted mt-1">错误</p></div>
+      <div class="bg-primary/5 rounded-xl p-3 md:p-4"><p id="unansweredCount" class="text-xl md:text-2xl font-bold text-primary">0</p><p class="text-xs text-ink-muted mt-1">未答</p></div>
     </div>
     <div class="mt-6 flex items-center justify-center gap-1 text-sm text-ink-muted">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       用时 <span id="timeUsed">0:00</span>
     </div>
   </div>
-  <div id="timeDetailSection" class="hidden bg-surface-card rounded-2xl shadow-xl p-6 md:p-8 mb-6">
+  <div id="timeDetailSection" class="hidden bg-surface-card rounded-2xl shadow-xl p-4 md:p-8 mb-4 md:mb-6">
     <h3 class="text-lg font-bold text-ink mb-1 flex items-center gap-2">
       每题停留时长
     </h3>
     <p class="text-xs text-ink-muted mb-4">按停留时间从长到短排列，帮助发现薄弱知识点</p>
     <div id="timeDetailList" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
   </div>
-  <div class="flex gap-3">
+  <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
     <button onclick="reviewExam()" class="flex-1 bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-primary/25">查看解析</button>
     <button onclick="restartExam()" class="flex-1 border-2 border-primary text-primary font-semibold py-3 rounded-xl hover:bg-primary/5 transition-colors cursor-pointer">重新考试</button>
   </div>
@@ -380,11 +437,11 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
       返回
     </button>
-    <h2 class="text-lg font-bold text-ink">错题本</h2>
-    <button onclick="confirmClearMistakes()" class="text-sm text-wrong font-medium cursor-pointer hover:text-red-700 transition-colors">清空</button>
+    <h2 class="text-lg font-bold text-ink">错题记录</h2>
+    <button onclick="confirmClearMistakes()" class="text-sm text-wrong font-medium cursor-pointer hover:text-red-700 transition-colors">清空记录</button>
   </div>
 </header>
-<main class="max-w-4xl mx-auto px-4 py-6">
+<main class="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-6">
   <div id="mistakeList"></div>
 </main>
 </div>
@@ -395,8 +452,8 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
   <div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
     <svg class="w-7 h-7 text-wrong" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
   </div>
-  <h3 class="text-xl font-bold text-ink mb-2">清空错题本？</h3>
-  <p class="text-ink-light text-sm mb-6">所有记录的错题将被删除，此操作不可撤销。</p>
+  <h3 class="text-xl font-bold text-ink mb-2">清空学习记录？</h3>
+  <p class="text-ink-light text-sm mb-6">错题次数、答对次数和学习进度都会被删除，此操作不可撤销。</p>
   <div class="flex gap-3">
     <button onclick="document.getElementById('clearConfirmModal').classList.add('hidden')" class="flex-1 border border-gray-200 text-ink-light font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">取消</button>
     <button onclick="doClearMistakes()" class="flex-1 bg-wrong text-white font-medium py-2.5 rounded-xl hover:bg-red-700 transition-colors cursor-pointer">确认清空</button>
@@ -424,7 +481,8 @@ var EXAM_PARTS = ${questionsJSON};
 var QUESTION_BANK_VERSION = '${bankVersion}';
 
 // State
-var examQuestions=[], selectedPart='all', selectedQCount=0, currentIndex=0, shuffleOptions=false;
+var examQuestions=[], selectedQCount=0, currentIndex=0, shuffleOptions=false;
+var selectedScopeType='all', selectedMajorKey=null, selectedPartIndex=null;
 var userAnswers={}, questionTimers={}, lastQuestionTime=0, markedQuestions=new Set(), timerInterval=null, timeLeft=0, startTime=null;
 var examFinished=false, reviewMode=false, shuffledOptionsCache=null, frozenTimers=null, timedQuestionIndex=-1;
 var examMode='normal', examLabel='', progressSaveInterval=null;
@@ -532,20 +590,119 @@ function resumeSavedExam(){
   startTimer();renderQuestion();renderQuestionMap();beginProgressSaving();
 }
 
-// Build part selector
-(function(){
-  var sel=document.getElementById('partSelector');
+// Build compact scope selector
+function getMajorKey(title){
+  var match=title.match(/^第([一二三四五六七八九十]+)部分/);
+  return match?match[1]:'other';
+}
+function getMajorLabel(title){
+  var match=title.match(/^(第[一二三四五六七八九十]+部分)/);
+  return match?match[1]:title;
+}
+function getChapterLabel(title){
+  var chapter=title.match(/^第[一二三四五六七八九十]+部分：(.+)$/);
+  return chapter?chapter[1]:title;
+}
+function getScopeGroups(){
+  var groups=[],map={};
   EXAM_PARTS.forEach(function(part,idx){
-    var label=document.createElement('label');
-    label.className='flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 cursor-pointer transition-colors hover:bg-gray-50';
-    label.innerHTML='<input type="radio" name="part" value="'+idx+'" class="accent-primary"><span class="text-sm font-medium">'+part.title+' ('+part.questions.length+'题)</span>';
-    sel.appendChild(label);
+    var key=getMajorKey(part.title);
+    if(!map[key]){
+      map[key]={key:key,label:getMajorLabel(part.title),count:0,items:[]};
+      groups.push(map[key]);
+    }
+    map[key].count+=part.questions.length;
+    map[key].items.push({index:idx,title:part.title,label:getChapterLabel(part.title),count:part.questions.length});
   });
-  sel.addEventListener('change',function(e){
-    document.querySelectorAll('#partSelector label').forEach(function(l){l.className='flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 cursor-pointer transition-colors hover:bg-gray-50';});
-    e.target.closest('label').className='flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5 cursor-pointer transition-colors hover:bg-primary/10';updateTimeEstimate();
-  });
-})();
+  return groups;
+}
+function getSelectedScopeQuestions(){
+  if(selectedScopeType==='part'&&selectedPartIndex!==null){
+    return EXAM_PARTS[selectedPartIndex].questions.slice();
+  }
+  var pool=[];
+  if(selectedScopeType==='major'&&selectedMajorKey){
+    EXAM_PARTS.forEach(function(part){if(getMajorKey(part.title)===selectedMajorKey)pool=pool.concat(part.questions);});
+    return pool;
+  }
+  EXAM_PARTS.forEach(function(part){pool=pool.concat(part.questions);});
+  return pool;
+}
+function getSelectedScopeLabel(){
+  if(selectedScopeType==='part'&&selectedPartIndex!==null)return EXAM_PARTS[selectedPartIndex].title;
+  if(selectedScopeType==='major'&&selectedMajorKey){
+    var groups=getScopeGroups();
+    var group=groups.find(function(g){return g.key===selectedMajorKey;});
+    return group?group.label:'全部范围';
+  }
+  return '全部范围';
+}
+function selectScope(type,key){
+  selectedScopeType=type;
+  selectedMajorKey=type==='major'?key:null;
+  selectedPartIndex=null;
+  renderScopeControls();
+  updateTimeEstimate();
+}
+function selectChapter(value){
+  if(value.indexOf('major:')===0){
+    selectedScopeType='major';
+    selectedMajorKey=value.replace('major:','');
+    selectedPartIndex=null;
+  }else if(value.indexOf('part:')===0){
+    selectedScopeType='part';
+    selectedPartIndex=parseInt(value.replace('part:',''),10);
+    selectedMajorKey=getMajorKey(EXAM_PARTS[selectedPartIndex].title);
+  }
+  renderScopeControls();
+  updateTimeEstimate();
+}
+function renderScopeControls(){
+  var tabs=document.getElementById('scopeTabs');
+  var chapterPicker=document.getElementById('chapterPicker');
+  var chapterSelect=document.getElementById('chapterSelect');
+  if(!tabs)return;
+  var groups=getScopeGroups();
+  tabs.innerHTML='';
+  function addTab(label,count,type,key){
+    var active=(type==='all'&&selectedScopeType==='all')||
+      (type==='major'&&selectedMajorKey===key&&selectedScopeType!=='all');
+    var btn=document.createElement('button');
+    btn.type='button';
+    btn.className='min-w-[4.5rem] sm:min-w-0 rounded-xl px-3 py-2.5 text-left border transition-all cursor-pointer shrink-0 '+(active?'bg-primary text-white border-primary shadow-md shadow-primary/20':'bg-white text-ink border-primary/10 hover:border-primary/40');
+    btn.innerHTML='<span class="block text-sm font-semibold">'+label+'</span><span class="block text-[11px] opacity-75 mt-0.5">'+count+'题</span>';
+    btn.onclick=function(){selectScope(type,key);};
+    tabs.appendChild(btn);
+  }
+  var total=0;EXAM_PARTS.forEach(function(part){total+=part.questions.length;});
+  addTab('全部',total,'all',null);
+  groups.forEach(function(group){addTab(group.label.replace('部分',''),group.count,'major',group.key);});
+
+  var activeGroup=null;
+  if(selectedScopeType==='major'&&selectedMajorKey)activeGroup=groups.find(function(g){return g.key===selectedMajorKey;});
+  if(selectedScopeType==='part'&&selectedPartIndex!==null){
+    var partKey=getMajorKey(EXAM_PARTS[selectedPartIndex].title);
+    activeGroup=groups.find(function(g){return g.key===partKey;});
+  }
+  if(activeGroup&&activeGroup.items.length>1){
+    chapterSelect.innerHTML='';
+    var allOption=document.createElement('option');
+    allOption.value='major:'+activeGroup.key;
+    allOption.textContent=activeGroup.label+'全部 ('+activeGroup.count+'题)';
+    chapterSelect.appendChild(allOption);
+    activeGroup.items.forEach(function(item){
+      var option=document.createElement('option');
+      option.value='part:'+item.index;
+      option.textContent=item.label+' ('+item.count+'题)';
+      chapterSelect.appendChild(option);
+    });
+    chapterSelect.value=selectedScopeType==='part'?'part:'+selectedPartIndex:'major:'+activeGroup.key;
+    chapterSelect.onchange=function(){selectChapter(this.value);};
+    chapterPicker.classList.remove('hidden');
+  }else if(chapterPicker){
+    chapterPicker.classList.add('hidden');
+  }
+}
 
 // ===== Shuffle Options Helper =====
 function shuffleArrayCopy(arr){
@@ -581,14 +738,19 @@ function formatMs(ms){
   return m+'\u5206'+sec+'\u79d2';
 }
 function updateTimeEstimate(){
-  var sel=document.querySelector('input[name="part"]:checked').value;
-  var pool=[];
-  if(sel==='all'){EXAM_PARTS.forEach(function(p){pool=pool.concat(p.questions);});}
-  else{pool=EXAM_PARTS[parseInt(sel)].questions.slice();}
+  var pool=getSelectedScopeQuestions();
   var count=selectedQCount>0?Math.min(selectedQCount,pool.length):pool.length;
   var mins=Math.max(10,Math.ceil(count*1.5));
   var el=document.getElementById('timeEstimate');
   if(el)el.textContent=mins;
+  var totalBadge=document.getElementById('totalBadge');
+  if(totalBadge)totalBadge.textContent=pool.length;
+  var scopeCount=document.getElementById('scopeCountText');
+  if(scopeCount)scopeCount.textContent=pool.length+'题可选';
+  var subtitle=document.getElementById('examSubtitle');
+  if(subtitle)subtitle.textContent='练习题库 · '+getSelectedScopeLabel();
+  updateStudyProgress();
+  updateStartScreenMistakes();
 }
 
 function setQCount(n){
@@ -605,10 +767,7 @@ function startExam(){
   if(!confirmReplaceSavedExam())return;
   examMode='normal';examLabel='';
   examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};markedQuestions=new Set();shuffledOptionsCache=null;frozenTimers=null;
-  var sel=document.querySelector('input[name="part"]:checked').value;
-  var pool=[];
-  if(sel==='all'){EXAM_PARTS.forEach(function(p){pool=pool.concat(p.questions);});}
-  else{pool=EXAM_PARTS[parseInt(sel)].questions.slice();}
+  var pool=getSelectedScopeQuestions();
   pool=shuffleArray(pool);
   examQuestions=selectedQCount>0?pool.slice(0,Math.min(selectedQCount,pool.length)):pool;
   // Assign sequential numbers for display
@@ -640,6 +799,7 @@ function renderQuestion(){
   var opts=shuffleOptions&&shuffledOptionsCache&&shuffledOptionsCache[currentIndex]?shuffledOptionsCache[currentIndex]:q.options;
   document.getElementById('currentNum').textContent=currentIndex+1;
   document.getElementById('partLabel').textContent=q._partTitle||'';
+  renderQuestionHistory(q);
   document.getElementById('questionText').textContent=(currentIndex+1)+'、'+q.text;
   document.getElementById('questionArea').classList.add('fade-in');
   var optArea=document.getElementById('optionsArea');optArea.innerHTML='';
@@ -651,7 +811,7 @@ function renderQuestion(){
     var isCorrect=reviewMode&&origLetter===q.answer;
     var isWrong=reviewMode&&isSelected&&origLetter!==q.answer;
     var btn=document.createElement('button');
-    var cls='option-btn w-full text-left p-4 rounded-xl border-2 cursor-pointer flex items-start gap-3 ';
+    var cls='option-btn w-full text-left p-3.5 md:p-4 rounded-xl border-2 cursor-pointer flex items-start gap-3 ';
     if(reviewMode){if(isCorrect)cls+='border-correct bg-correct-bg';else if(isWrong)cls+='border-wrong bg-wrong-bg';else cls+='border-gray-200 bg-white';}
     else if(isSelected)cls+='border-primary bg-primary/5 shadow-md';
     else cls+='border-gray-200 bg-white hover:border-primary/30 hover:shadow-sm';
@@ -667,7 +827,7 @@ function renderQuestion(){
     else lc+='bg-gray-100 text-ink-light';
     circ.className=lc;circ.textContent=displayLetter;
 
-    var txt=document.createElement('span');txt.className='pt-1 leading-relaxed text-sm md:text-base';txt.textContent=opt.text;
+    var txt=document.createElement('span');txt.className='pt-0.5 md:pt-1 leading-relaxed text-sm md:text-base';txt.textContent=opt.text;
     btn.appendChild(circ);btn.appendChild(txt);
 
     if(reviewMode&&isCorrect){var ic=document.createElement('span');ic.className='ml-auto text-correct shrink-0';ic.innerHTML='<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';btn.appendChild(ic);}
@@ -735,7 +895,7 @@ function renderTimeRank(containerId){
 
 function renderQuestionMap(){
   var grid=document.getElementById('questionMapGrid');grid.innerHTML='';
-  examQuestions.forEach(function(q,i){var btn=document.createElement('button');btn.className='w-10 h-10 rounded-lg text-xs font-bold cursor-pointer transition-all duration-200 hover:scale-110 ';btn.textContent=i+1;btn.onclick=(function(idx){return function(){currentIndex=idx;renderQuestion();saveExamProgress();};})(i);grid.appendChild(btn);});
+  examQuestions.forEach(function(q,i){var btn=document.createElement('button');btn.className='w-9 h-9 md:w-10 md:h-10 rounded-lg text-xs font-bold cursor-pointer transition-all duration-200 hover:scale-110 ';btn.textContent=i+1;btn.onclick=(function(idx){return function(){currentIndex=idx;renderQuestion();saveExamProgress();};})(i);grid.appendChild(btn);});
   updateQuestionMap();
 }
 
@@ -749,7 +909,7 @@ function updateOptionStyles(){
     var btn=btns[i];
     var letter=opts[i].letter;
     var isSelected=userAnswers[currentIndex]===letter;
-    var cls='option-btn w-full text-left p-4 rounded-xl border-2 cursor-pointer flex items-start gap-3 ';
+    var cls='option-btn w-full text-left p-3.5 md:p-4 rounded-xl border-2 cursor-pointer flex items-start gap-3 ';
     if(isSelected)cls+='border-primary bg-primary/5 shadow-md';
     else cls+='border-gray-200 bg-white hover:border-primary/30 hover:shadow-sm';
     btn.className=cls;
@@ -762,12 +922,16 @@ function updateOptionStyles(){
 }
 function updateQuestionMap(){
   var btns=document.getElementById('questionMapGrid').children;
+  var stats=getStudyStats();
   for(var i=0;i<btns.length;i++){
     var btn=btns[i],isA=userAnswers[i]!==undefined,isM=markedQuestions.has(i),isC=i===currentIndex;
-    var cls='w-10 h-10 rounded-lg text-xs font-bold cursor-pointer transition-all duration-200 hover:scale-110 ';
+    var record=getStudyRecord(examQuestions[i],stats);
+    var hasHistory=record&&record.attempts>0;
+    var isWeak=isWeakRecord(record);
+    var cls='w-9 h-9 md:w-10 md:h-10 rounded-lg text-xs font-bold cursor-pointer transition-all duration-200 hover:scale-110 ';
     if(reviewMode){cls+=userAnswers[i]===examQuestions[i].answer?'bg-correct text-white':'bg-wrong text-white';}
     else if(isC){cls+='ring-2 ring-primary ring-offset-2 ';cls+=isM?'bg-yellow-400 text-white':isA?'bg-primary text-white':'bg-white text-ink border border-gray-200';}
-    else if(isM)cls+='bg-yellow-400 text-white';else if(isA)cls+='bg-primary text-white';else cls+='bg-gray-100 text-ink-light hover:bg-gray-200';
+    else if(isM)cls+='bg-yellow-400 text-white';else if(isA)cls+='bg-primary text-white';else if(isWeak)cls+='bg-amber-50 text-amber-700 border border-amber-200';else if(hasHistory)cls+='bg-emerald-50 text-emerald-700 border border-emerald-200';else cls+='bg-gray-100 text-ink-light hover:bg-gray-200';
     btn.className=cls;
   }
 }
@@ -783,23 +947,7 @@ function submitExam(){
   clearInterval(timerInterval);clearInterval(progressSaveInterval);examFinished=true;closeModal();clearSavedExam(false);
   var c=0,w=0,u=0;
   examQuestions.forEach(function(q,i){if(userAnswers[i]===undefined)u++;else if(userAnswers[i]===q.answer)c++;else w++;});
-  // Save wrong/unanswered to mistake bank
-  var bank=getMistakeBank();
-  examQuestions.forEach(function(q,i){
-    var key=q.text.substring(0,60);
-    if(userAnswers[i]!==q.answer){
-      if(!bank.find(function(m){return m.key===key;})){
-        bank.push({key:key,text:q.text,options:q.options,answer:q.answer,explanation:q.explanation||'',wrongAt:Date.now(),wrongCount:1});
-      }else{
-        var existing=bank.find(function(m){return m.key===key;});
-        existing.wrongCount=(existing.wrongCount||0)+1;
-        existing.wrongAt=Date.now();
-      }
-    }else{
-      bank=bank.filter(function(m){return m.key!==key;});
-    }
-  });
-  saveMistakeBank(bank);
+  recordExamResults();
   var t=examQuestions.length,pct=Math.round(c/t*100);
   stopQuestionTimer();frozenTimers={};for(var fi=0;fi<examQuestions.length;fi++){frozenTimers[fi]=questionTimers[fi]||0;}var elapsed=Math.round((Date.now()-startTime)/1000),em=Math.floor(elapsed/60),es=elapsed%60;
   document.getElementById('scorePercent').textContent=pct+'%';
@@ -844,19 +992,219 @@ function submitExam(){
     timeList.appendChild(row);
   });
   updateStartScreenMistakes();
+  updateStudyProgress();
 }
 function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.add('hidden');document.getElementById('resumeScreen').classList.add('hidden');document.getElementById('mistakeBookScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();var tr=document.getElementById('timeRankList');if(tr){tr.classList.remove('hidden');renderTimeRank('timeRankList');}}
 function restartExam(){document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.remove('hidden');var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');updateResumeCard();}
 
-// ===== Mistake Bank (localStorage) =====
+// ===== Study Stats & Mistake Bank (localStorage) =====
 var MISTAKE_KEY='pmp_mistake_bank';
-function getMistakeBank(){try{var d=localStorage.getItem(MISTAKE_KEY);return d?JSON.parse(d):[];}catch(e){return[];}}
-function saveMistakeBank(bank){try{localStorage.setItem(MISTAKE_KEY,JSON.stringify(bank));}catch(e){}}
-function clearMistakeBank(){localStorage.removeItem(MISTAKE_KEY);updateStartScreenMistakes();}
-function getMistakeCount(){return getMistakeBank().length;}
+var STUDY_STATS_KEY='pmp_study_stats_v1';
+function getLegacyQuestionKey(q){return ((q&&q.key)||((q&&q.text)||'')).substring(0,60);}
+function getQuestionKey(q){return (q&&q._questionKey)||((q&&q.key)||getLegacyQuestionKey(q));}
+function escapeHtml(str){return String(str||'').replace(/[&<>"']/g,function(ch){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});}
+function normalizeStudyRecord(record,q,key){
+  record=record||{};
+  record.key=key||record.key||getQuestionKey(q);
+  if(q){
+    record.text=q.text||record.text||'';
+    record.options=Array.isArray(q.options)?q.options:(record.options||[]);
+    record.answer=q.answer||record.answer||'';
+    record.explanation=q.explanation||record.explanation||'';
+    record.partTitle=q._partTitle||record.partTitle||'';
+  }
+  record.attempts=Math.max(record.attempts||0,(record.correctCount||0)+(record.wrongCount||0));
+  record.correctCount=record.correctCount||0;
+  record.wrongCount=record.wrongCount||0;
+  record.correctStreak=record.correctStreak||0;
+  return record;
+}
+function getLegacyMistakeBank(){try{var d=localStorage.getItem(MISTAKE_KEY);var arr=d?JSON.parse(d):[];return Array.isArray(arr)?arr:[];}catch(e){return[];}}
+function getStudyStats(){
+  try{
+    var raw=localStorage.getItem(STUDY_STATS_KEY);
+    if(raw){
+      var parsed=JSON.parse(raw);
+      if(Array.isArray(parsed)){
+        var converted={};
+        parsed.forEach(function(item){var key=item.key||getQuestionKey(item);converted[key]=normalizeStudyRecord(item,null,key);});
+        saveStudyStats(converted);
+        return converted;
+      }
+      if(parsed&&typeof parsed==='object')return parsed;
+    }
+    var legacy=getLegacyMistakeBank();
+    if(legacy.length){
+      var migrated={};
+      legacy.forEach(function(item){
+        var key=item.key||getQuestionKey(item);
+        var wrongCount=item.wrongCount||1;
+        migrated[key]=normalizeStudyRecord({
+          key:key,
+          text:item.text||'',
+          options:item.options||[],
+          answer:item.answer||'',
+          explanation:item.explanation||'',
+          attempts:wrongCount,
+          wrongCount:wrongCount,
+          correctCount:0,
+          correctStreak:0,
+          lastResult:'wrong',
+          lastWrongAt:item.wrongAt||Date.now(),
+          lastAnsweredAt:item.wrongAt||Date.now()
+        },null,key);
+      });
+      saveStudyStats(migrated);
+      return migrated;
+    }
+  }catch(e){}
+  return {};
+}
+function saveStudyStats(stats){try{localStorage.setItem(STUDY_STATS_KEY,JSON.stringify(stats||{}));}catch(e){}}
+function getStudyRecord(q,stats){
+  stats=stats||getStudyStats();
+  var key=getQuestionKey(q);
+  var record=stats[key]||null;
+  if(!record&&q){
+    var legacyKey=getLegacyQuestionKey(q);
+    if(legacyKey&&stats[legacyKey]){
+      record=normalizeStudyRecord(stats[legacyKey],q,key);
+      stats[key]=record;
+      delete stats[legacyKey];
+      saveStudyStats(stats);
+    }
+  }
+  return record;
+}
+function getAllStudyRecords(){var stats=getStudyStats();return Object.keys(stats).map(function(key){return normalizeStudyRecord(stats[key],null,key);});}
+function getMistakeBank(){return getAllStudyRecords().filter(function(item){return (item.wrongCount||0)>0;});}
+function saveMistakeBank(bank){
+  var stats=getStudyStats();
+  (bank||[]).forEach(function(item){var key=item.key||getQuestionKey(item);stats[key]=normalizeStudyRecord(item,null,key);});
+  saveStudyStats(stats);
+}
+function getScopedQuestionKeys(){
+  var keys={};
+  getSelectedScopeQuestions().forEach(function(q){keys[getQuestionKey(q)]=true;});
+  return keys;
+}
+function getScopedMistakeRecords(){
+  var keys=getScopedQuestionKeys();
+  return getMistakeBank().filter(function(item){return keys[item.key];});
+}
+function clearMistakeBank(){
+  localStorage.removeItem(STUDY_STATS_KEY);
+  localStorage.removeItem(MISTAKE_KEY);
+  updateStudyProgress();
+  updateStartScreenMistakes();
+}
+function getMistakeCount(){return getScopedMistakeRecords().length;}
+function isWeakRecord(record){
+  if(!record||!record.attempts||!record.wrongCount)return false;
+  var wrongRate=record.wrongCount/record.attempts;
+  return record.wrongCount>=record.correctCount||wrongRate>=0.35||record.correctStreak<2;
+}
+function getWeakWeight(record){
+  if(!record)return 1;
+  var attempts=record.attempts||Math.max(1,(record.correctCount||0)+(record.wrongCount||0));
+  var wrongRate=(record.wrongCount||0)/attempts;
+  var gap=Math.max(0,(record.wrongCount||0)-(record.correctCount||0));
+  var streakBoost=(record.correctStreak||0)>=2?0:2;
+  return Math.max(1,Math.min(24,1+(record.wrongCount||0)*3+gap*2+Math.round(wrongRate*6)+streakBoost));
+}
+function weightedPickItems(items,count,weightFn){
+  var source=(items||[]).slice(),picked=[];
+  count=Math.min(count,source.length);
+  while(picked.length<count&&source.length){
+    var total=source.reduce(function(sum,item){return sum+Math.max(1,weightFn(item));},0);
+    var r=Math.random()*total,idx=0;
+    for(var i=0;i<source.length;i++){
+      r-=Math.max(1,weightFn(source[i]));
+      if(r<=0){idx=i;break;}
+    }
+    picked.push(source.splice(idx,1)[0]);
+  }
+  return picked;
+}
+function recordToQuestion(record){
+  return {text:record.text,options:record.options||[],answer:record.answer,explanation:record.explanation||'',_partTitle:record.partTitle||'',_questionKey:record.key};
+}
+function recordExamResults(){
+  var stats=getStudyStats(),now=Date.now();
+  examQuestions.forEach(function(q,i){
+    var selected=userAnswers[i];
+    if(selected===undefined)return;
+    var key=getQuestionKey(q);
+    var record=normalizeStudyRecord(stats[key],q,key);
+    record.attempts=(record.attempts||0)+1;
+    record.lastAnswer=selected;
+    record.lastAnsweredAt=now;
+    if(selected===q.answer){
+      record.correctCount=(record.correctCount||0)+1;
+      record.correctStreak=(record.correctStreak||0)+1;
+      record.lastCorrectAt=now;
+      record.lastResult='correct';
+    }else{
+      record.wrongCount=(record.wrongCount||0)+1;
+      record.correctStreak=0;
+      record.lastWrongAt=now;
+      record.lastResult='wrong';
+    }
+    stats[key]=record;
+  });
+  saveStudyStats(stats);
+}
+function summarizeStudyProgress(pool){
+  var stats=getStudyStats();
+  var summary={total:pool.length,studied:0,weak:0,correct:0,wrong:0,attempts:0};
+  pool.forEach(function(q){
+    var record=getStudyRecord(q,stats);
+    if(!record||!record.attempts)return;
+    summary.studied++;
+    if(isWeakRecord(record))summary.weak++;
+    summary.correct+=record.correctCount||0;
+    summary.wrong+=record.wrongCount||0;
+    summary.attempts+=record.attempts||0;
+  });
+  return summary;
+}
+function updateStudyProgress(){
+  var pool=getSelectedScopeQuestions();
+  var summary=summarizeStudyProgress(pool);
+  var card=document.getElementById('studyProgressCard');
+  if(card){
+    if(summary.studied>0)card.classList.remove('hidden');
+    else card.classList.add('hidden');
+  }
+  var rawPct=summary.total?summary.studied/summary.total*100:0;
+  var pct=Math.round(rawPct);
+  var pctLabel=summary.studied>0&&pct===0?'<1%':pct+'%';
+  var accuracy=summary.attempts?Math.round(summary.correct/summary.attempts*100):null;
+  var bar=document.getElementById('studyProgressBar');
+  if(bar)bar.style.width=(summary.studied>0?Math.max(rawPct,1):0)+'%';
+  var percent=document.getElementById('studyProgressPercent');
+  if(percent)percent.textContent=pctLabel;
+  var text=document.getElementById('studyProgressText');
+  if(text)text.textContent='已练 '+summary.studied+' / '+summary.total+' 题 · 薄弱 '+summary.weak+' · 正确率 '+(accuracy===null?'--':accuracy+'%');
+}
+function renderQuestionHistory(q){
+  var box=document.getElementById('questionHistory');
+  if(!box)return;
+  var record=getStudyRecord(q);
+  if(!record||!record.attempts){
+    box.classList.add('hidden');
+    box.textContent='';
+    return;
+  }
+  var accuracy=Math.round((record.correctCount||0)/(record.attempts||1)*100);
+  var weak=isWeakRecord(record);
+  box.className=(weak?'mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700':'mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700');
+  box.innerHTML='<span class="font-semibold">'+(weak?'需要巩固':'已练过')+'</span> · 已练 '+record.attempts+' 次 · 错 '+(record.wrongCount||0)+' 次 · 对 '+(record.correctCount||0)+' 次 · 历史正确率 '+accuracy+'%';
+}
 
 function updateStartScreenMistakes(){
-  var count=getMistakeCount();
+  var records=getScopedMistakeRecords();
+  var count=records.length;
   var badge=document.getElementById('mistakeBadge');
   var card=document.getElementById('mistakeCard');
   var countEl=document.getElementById('mistakeCountText');
@@ -868,38 +1216,41 @@ function updateStartScreenMistakes(){
   if(countEl)countEl.textContent=count;
   var drBtn=document.getElementById('drillBtn');
   var mixBtn=document.getElementById('mixBtn');
-  if(drillBtn){drillBtn.disabled=count===0;if(count>0)drillBtn.classList.remove('opacity-40','cursor-not-allowed');else drBtn.classList.add('opacity-40','cursor-not-allowed');}
+  if(drBtn){drBtn.disabled=count===0;if(count>0)drBtn.classList.remove('opacity-40','cursor-not-allowed');else drBtn.classList.add('opacity-40','cursor-not-allowed');}
   if(mixBtn){mixBtn.disabled=count===0;if(count>0)mixBtn.classList.remove('opacity-40','cursor-not-allowed');else mixBtn.classList.add('opacity-40','cursor-not-allowed');}
 }
 
 function startDrill(){
   if(!confirmReplaceSavedExam())return;
   examMode='drill';
-  var bank=getMistakeBank();
-  if(bank.length===0)return;
-  examQuestions=shuffleArray(bank.map(function(m){return{text:m.text,options:m.options,answer:m.answer,explanation:m.explanation};}));
-  startExamWithQuestions(examQuestions,'\u9519\u9898\u4e13\u9879\u63d0\u5347');
+  var records=getScopedMistakeRecords();
+  if(records.length===0)return;
+  var count=selectedQCount>0?Math.min(selectedQCount,records.length):records.length;
+  examQuestions=weightedPickItems(records,count,getWeakWeight).map(recordToQuestion);
+  startExamWithQuestions(examQuestions,'错题专项 · 高频错题优先');
 }
 
 function startMix(){
   if(!confirmReplaceSavedExam())return;
   examMode='mix';
-  var sel=document.querySelector('input[name="part"]:checked').value;
-  var scopePool=[];
-  if(sel==='all'){EXAM_PARTS.forEach(function(p){scopePool=scopePool.concat(p.questions);});}
-  else{scopePool=EXAM_PARTS[parseInt(sel)].questions.slice();}
-  var bank=getMistakeBank();
-  var scopeKeys=scopePool.map(function(q){return q.text.substring(0,60);});
-  var scopeMistakes=bank.filter(function(m){return scopeKeys.includes(m.key);});
-  var mistakeQs=shuffleArray(scopeMistakes);
-  if(selectedQCount>0 && selectedQCount<mistakeQs.length)mistakeQs=mistakeQs.slice(0,selectedQCount);
-  var freshPool=scopePool.filter(function(q){return!scopeMistakes.find(function(m){return m.key===q.text.substring(0,60);});});
-  freshPool=shuffleArray(freshPool);
-  var remaining=selectedQCount>0?Math.max(0,selectedQCount-mistakeQs.length):freshPool.length;
-  var freshQs=freshPool.slice(0,remaining);
-  var mixed=shuffleArray(mistakeQs.map(function(m){return{text:m.text,options:m.options,answer:m.answer,explanation:m.explanation};}).concat(freshQs));
+  var scopePool=getSelectedScopeQuestions();
+  var records=getScopedMistakeRecords();
+  var stats=getStudyStats();
+  var target=selectedQCount>0?Math.min(selectedQCount,scopePool.length):scopePool.length;
+  var weakQuota=records.length?Math.min(records.length,selectedQCount>0?Math.max(1,Math.ceil(target*0.6)):records.length):0;
+  var selectedWeak=weightedPickItems(records,weakQuota,getWeakWeight);
+  var selectedWeakKeys={};selectedWeak.forEach(function(item){selectedWeakKeys[item.key]=true;});
+  var remaining=Math.max(0,target-selectedWeak.length);
+  var otherPool=scopePool.filter(function(q){return!selectedWeakKeys[getQuestionKey(q)];});
+  var freshQs=weightedPickItems(otherPool,remaining,function(q){
+    var record=getStudyRecord(q,stats);
+    if(!record||!record.attempts)return 4;
+    if(isWeakRecord(record))return getWeakWeight(record);
+    return Math.max(1,3-(record.correctStreak||0));
+  });
+  var mixed=shuffleArray(selectedWeak.map(recordToQuestion).concat(freshQs));
   if(mixed.length===0)return;
-  startExamWithQuestions(mixed,'\u6df7\u5408\u7ec3\u4e60 (\u9519\u9898+\u65b0\u9898)');
+  startExamWithQuestions(mixed,'混合练习 · 薄弱题优先');
 }function startExamWithQuestions(questions,label){
   examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};questionTimers={};lastQuestionTime=0;markedQuestions=new Set();shuffledOptionsCache=null;frozenTimers=null;
   examQuestions=questions;
@@ -930,18 +1281,21 @@ function hideMistakeBook(){
 }
 
 function renderMistakeBook(){
-  var bank=getMistakeBank();
+  var bank=getScopedMistakeRecords();
   var container=document.getElementById('mistakeList');
   container.innerHTML='';
   if(bank.length===0){
-    container.innerHTML='<p class="text-center text-ink-muted py-12">\u6682\u65e0\u9519\u9898\uff0c\u7ee7\u7eed\u4fdd\u6301\uff01</p>';
+    container.innerHTML='<p class="text-center text-ink-muted py-12">当前范围暂无错题记录，继续保持！</p>';
     return;
   }
-  bank.sort(function(a,b){return (b.wrongCount||1)-(a.wrongCount||1);});
+  bank.sort(function(a,b){return getWeakWeight(b)-getWeakWeight(a);});
   bank.forEach(function(m,idx){
+    var attempts=m.attempts||Math.max(1,(m.correctCount||0)+(m.wrongCount||0));
+    var accuracy=Math.round((m.correctCount||0)/attempts*100);
+    var weak=isWeakRecord(m);
     var div=document.createElement('div');
-    div.className='bg-white rounded-xl border border-gray-200 p-5 mb-4';
-    div.innerHTML='<div class="flex items-start justify-between gap-3 mb-3"><p class="text-sm font-medium leading-relaxed flex-1">'+(idx+1)+'\u3001'+m.text+'</p><span class="shrink-0 text-xs px-2 py-1 rounded-full bg-wrong-bg text-wrong font-bold">\u9519 '+(m.wrongCount||1)+' \u6b21</span></div><div class="flex flex-wrap gap-2 mb-3">'+m.options.map(function(o){var isC=o.letter===m.answer;return '<span class="text-xs px-2.5 py-1 rounded-lg '+(isC?'bg-correct-bg text-correct font-bold border border-correct/30':'bg-gray-50 text-ink-light')+'">'+o.letter+'. '+o.text+'</span>';}).join('')+'</div>'+(m.explanation?'<p class="text-xs text-ink-muted leading-relaxed border-t border-gray-100 pt-3">\u89e3\u6790\uff1a'+m.explanation+'</p>':'');
+    div.className='bg-white rounded-xl border border-gray-200 p-4 md:p-5 mb-3 md:mb-4';
+    div.innerHTML='<div class="flex items-start justify-between gap-3 mb-3"><p class="text-sm font-medium leading-relaxed flex-1">'+(idx+1)+'、'+escapeHtml(m.text)+'</p><span class="shrink-0 text-xs px-2 py-1 rounded-full '+(weak?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')+' font-bold">'+(weak?'需要巩固':'趋于熟悉')+'</span></div><div class="flex flex-wrap gap-2 mb-3"><span class="text-xs px-2.5 py-1 rounded-lg bg-wrong-bg text-wrong font-bold">错 '+(m.wrongCount||0)+' 次</span><span class="text-xs px-2.5 py-1 rounded-lg bg-correct-bg text-correct font-bold">对 '+(m.correctCount||0)+' 次</span><span class="text-xs px-2.5 py-1 rounded-lg bg-primary/5 text-primary font-bold">正确率 '+accuracy+'%</span></div><div class="flex flex-wrap gap-2 mb-3">'+(m.options||[]).map(function(o){var isC=o.letter===m.answer;return '<span class="text-xs px-2.5 py-1 rounded-lg '+(isC?'bg-correct-bg text-correct font-bold border border-correct/30':'bg-gray-50 text-ink-light')+'">'+escapeHtml(o.letter)+'. '+escapeHtml(o.text)+'</span>';}).join('')+'</div>'+(m.explanation?'<p class="text-xs text-ink-muted leading-relaxed border-t border-gray-100 pt-3">解析：'+escapeHtml(m.explanation)+'</p>':'');
     container.appendChild(div);
   });
 }
@@ -951,6 +1305,7 @@ function doClearMistakes(){clearMistakeBank();document.getElementById('clearConf
 
 updateStartScreenMistakes();
 updateResumeCard();
+renderScopeControls();
 updateTimeEstimate();
 
 var hiddenAt=0;
