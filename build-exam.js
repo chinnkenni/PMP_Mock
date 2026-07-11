@@ -4,6 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 
 // ===== 配置 =====
 const MD_DIR = path.join(__dirname, "questions");
@@ -26,6 +27,47 @@ function compareQuestionFiles(a, b) {
   if (ka.part !== kb.part) return ka.part - kb.part;
   if (ka.chapter !== kb.chapter) return ka.chapter - kb.chapter;
   return ka.name.localeCompare(kb.name, "zh-CN");
+}
+
+function verifyReviewOptionOrder(html) {
+  const helperMatch = html.match(
+    /function getOptionsForDisplay\(q,qi\)\{[\s\S]*?\n\}/
+  );
+  if (!helperMatch) {
+    throw new Error("Regression check failed: option display helper is missing");
+  }
+
+  const question = {
+    options: ["A", "B", "C", "D"].map((letter) => ({ letter })),
+  };
+  const shuffled = [question.options[2], question.options[0], question.options[3], question.options[1]];
+  const scenarios = [
+    { name: "shuffled answering", reviewMode: false, shuffleOptions: true, cache: { 0: shuffled }, expected: "CADB" },
+    { name: "shuffled review", reviewMode: true, shuffleOptions: true, cache: { 0: shuffled }, expected: "ABCD" },
+    { name: "normal review", reviewMode: true, shuffleOptions: false, cache: null, expected: "ABCD" },
+  ];
+
+  scenarios.forEach((scenario) => {
+    const context = {
+      question,
+      reviewMode: scenario.reviewMode,
+      shuffleOptions: scenario.shuffleOptions,
+      shuffledOptionsCache: scenario.cache,
+      result: null,
+    };
+    vm.runInNewContext(
+      helperMatch[0] + "\nresult=getOptionsForDisplay(question,0);",
+      context
+    );
+    const actual = context.result.map((option) => option.letter).join("");
+    if (actual !== scenario.expected) {
+      throw new Error(
+        `Regression check failed (${scenario.name}): expected ${scenario.expected}, got ${actual}`
+      );
+    }
+  });
+
+  console.log("Regression check: shuffled review option order passed");
 }
 
 // ===== 解析单个 md 文件 =====
@@ -145,6 +187,7 @@ function buildExam() {
 
   // Generate HTML
   const html = generateHTML(parts, totalQuestions);
+  verifyReviewOptionOrder(html);
   fs.writeFileSync(OUTPUT, html, "utf-8");
   console.log("Output: " + OUTPUT);
 }
@@ -352,6 +395,13 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
     <div id="optionsArea" class="space-y-2.5 md:space-y-3"></div>
     <div id="explanationArea" class="hidden mt-6 p-4 rounded-xl bg-primary/5 border border-primary/10">
       <p id="explanationText" class="text-sm text-ink-light leading-relaxed"></p>
+      <div id="aiReviewAction" class="hidden mt-3 pt-3 border-t border-primary/10 flex flex-wrap items-center justify-between gap-2">
+        <p class="text-xs text-ink-muted flex-1 min-w-[160px]">用游戏开发案例拆解选错原因和关键差异</p>
+        <button id="copyAiBtn" type="button" onclick="copyWrongAnswerForAI()" class="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-white px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors cursor-pointer">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          <span id="copyAiText">复制给 AI 分析</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -471,6 +521,24 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
   <div class="flex gap-3">
     <button onclick="closeModal()" class="flex-1 border border-gray-200 text-ink-light font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">继续答题</button>
     <button onclick="submitExam()" class="flex-1 bg-cta text-white font-medium py-2.5 rounded-xl hover:bg-cta-dark transition-colors cursor-pointer">确认交卷</button>
+  </div>
+</div>
+</div>
+
+<!-- ========== AI COPY FALLBACK ========== -->
+<div id="aiCopyModal" class="hidden fixed inset-0 z-[110] flex items-center justify-center px-3 md:px-4 bg-black/40 backdrop-blur-sm">
+<div class="bg-white rounded-2xl shadow-2xl p-4 md:p-6 max-w-2xl w-full fade-in">
+  <div class="flex items-start justify-between gap-3 mb-3">
+    <div>
+      <h3 class="text-lg font-bold text-ink">AI 复盘内容</h3>
+      <p id="aiCopyModalHint" class="text-xs text-ink-muted mt-1">浏览器限制了自动复制，内容已全选。电脑按 ⌘C / Ctrl+C，手机长按后选“复制”。</p>
+    </div>
+    <button type="button" onclick="closeAiCopyModal()" class="shrink-0 w-8 h-8 rounded-lg text-ink-muted hover:bg-gray-100 cursor-pointer" aria-label="关闭 AI 复盘内容">×</button>
+  </div>
+  <textarea id="aiCopyContent" readonly class="w-full h-64 md:h-80 resize-none rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs leading-relaxed text-ink outline-none focus:ring-2 focus:ring-primary/30"></textarea>
+  <div class="mt-3 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+    <button type="button" onclick="closeAiCopyModal()" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-ink-light hover:bg-gray-50 cursor-pointer">关闭</button>
+    <button type="button" onclick="retryAiModalCopy()" class="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark cursor-pointer">再次复制</button>
   </div>
 </div>
 </div>
@@ -727,6 +795,96 @@ function displayToOriginal(qi,displayLetter){
   for(var i=0;i<opts.length;i++){if(String.fromCharCode(65+i)===displayLetter)return opts[i].letter;}
   return displayLetter;
 }
+// Keep review letters aligned with the source answer key and explanation text.
+function getOptionsForDisplay(q,qi){
+  if(reviewMode)return q.options;
+  if(shuffleOptions&&shuffledOptionsCache&&shuffledOptionsCache[qi])return shuffledOptionsCache[qi];
+  return q.options;
+}
+
+function getOptionByLetter(q,letter){
+  if(!q||!Array.isArray(q.options))return null;
+  for(var i=0;i<q.options.length;i++){if(q.options[i].letter===letter)return q.options[i];}
+  return null;
+}
+function buildAiReviewPrompt(q,selectedLetter){
+  var selected=getOptionByLetter(q,selectedLetter);
+  var correct=getOptionByLetter(q,q.answer);
+  var lines=[
+    '我正在复盘一道 PMP 错题。请你作为熟悉游戏开发项目的 PMP 学习教练，帮我真正理解这道题。',
+    '重点是理清“我的选择”与“正确答案”的差异边界，不要只复述定义。',
+    '',
+    '【知识范围】',
+    q._partTitle||'未标注',
+    '',
+    '【题目】',
+    q.text,
+    '',
+    '【全部选项】'
+  ];
+  q.options.forEach(function(option){lines.push(option.letter+'. '+option.text);});
+  lines.push(
+    '',
+    '【我的选择】',
+    selectedLetter+'. '+(selected?selected.text:''),
+    '',
+    '【正确答案】',
+    q.answer+'. '+(correct?correct.text:''),
+    '',
+    '【题库解析】',
+    q.explanation||'暂无解析',
+    '',
+    '请按以下结构回答：',
+    '1. 【我为什么会选错】指出错误选项看似合理的地方，以及它与题干真正在问的层级或目标错在哪里。',
+    '2. 【核心差异对照】用表格对比我的选择和正确答案，至少对比：关注对象、所处阶段/适用场景、动作目的、题干关键词、最容易混淆的边界。',
+    '3. 【游戏开发案例】用一个具体的游戏版本开发场景说明两者的差异，可结合新玩法、需求范围、排期、质量、风险或跨团队协作。',
+    '4. 【一句话判断法】告诉我下次看到什么关键词，应该优先选哪一类答案。',
+    '5. 【反向验证】简短说明在什么情况下，我选的那个选项反而会成为正确答案。'
+  );
+  return lines.join('\\n');
+}
+function fallbackCopyText(text){
+  return new Promise(function(resolve,reject){
+    var area=document.createElement('textarea');
+    area.value=text;area.setAttribute('readonly','');area.style.position='fixed';area.style.top='0';area.style.left='0';area.style.width='2px';area.style.height='2px';area.style.padding='0';area.style.border='0';area.style.outline='0';area.style.background='transparent';
+    document.body.appendChild(area);area.focus();area.select();area.setSelectionRange(0,area.value.length);
+    try{var copied=document.execCommand('copy');document.body.removeChild(area);if(copied)resolve();else reject(new Error('copy failed'));}
+    catch(err){document.body.removeChild(area);reject(err);}
+  });
+}
+function writeClipboardText(text){
+  return fallbackCopyText(text).catch(function(){
+    if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(text);
+    return Promise.reject(new Error('clipboard unavailable'));
+  });
+}
+var aiCopyResetTimer=null;
+function setAiCopyStatus(message){
+  var text=document.getElementById('copyAiText');if(!text)return;
+  text.textContent=message;clearTimeout(aiCopyResetTimer);
+  aiCopyResetTimer=setTimeout(function(){text.textContent='复制给 AI 分析';},1800);
+}
+function selectAiCopyContent(){
+  var area=document.getElementById('aiCopyContent');if(!area)return;
+  area.focus();area.select();area.setSelectionRange(0,area.value.length);
+}
+function openAiCopyModal(text){
+  var modal=document.getElementById('aiCopyModal'),area=document.getElementById('aiCopyContent');
+  area.value=text;modal.classList.remove('hidden');
+  setTimeout(selectAiCopyContent,0);
+}
+function closeAiCopyModal(){document.getElementById('aiCopyModal').classList.add('hidden');}
+function retryAiModalCopy(){
+  var area=document.getElementById('aiCopyContent'),hint=document.getElementById('aiCopyModalHint');
+  selectAiCopyContent();
+  writeClipboardText(area.value).then(function(){hint.textContent='已复制，可以直接粘贴给 AI。';setAiCopyStatus('已复制');}).catch(function(){hint.textContent='内容已全选。电脑按 ⌘C / Ctrl+C，手机长按后选“复制”。';selectAiCopyContent();});
+}
+function copyWrongAnswerForAI(){
+  var q=examQuestions[currentIndex],selected=userAnswers[currentIndex];
+  if(!reviewMode||!q||!selected||selected===q.answer)return;
+  var prompt=buildAiReviewPrompt(q,selected);
+  writeClipboardText(prompt).then(function(){setAiCopyStatus('已复制');}).catch(function(){setAiCopyStatus('请手动复制');openAiCopyModal(prompt);});
+}
 
 // ===== Question Time Tracking =====
 function startQuestionTimer(){lastQuestionTime=Date.now();timedQuestionIndex=currentIndex;}
@@ -796,7 +954,7 @@ function updateTimerDisplay(){
 function renderQuestion(){
   stopQuestionTimer();startQuestionTimer();
   var q=examQuestions[currentIndex];
-  var opts=shuffleOptions&&shuffledOptionsCache&&shuffledOptionsCache[currentIndex]?shuffledOptionsCache[currentIndex]:q.options;
+  var opts=getOptionsForDisplay(q,currentIndex);
   document.getElementById('currentNum').textContent=currentIndex+1;
   document.getElementById('partLabel').textContent=q._partTitle||'';
   renderQuestionHistory(q);
@@ -836,6 +994,7 @@ function renderQuestion(){
   });
 
   var expArea=document.getElementById('explanationArea');
+  var aiAction=document.getElementById('aiReviewAction');
   if(reviewMode){
     var ua=userAnswers[currentIndex],ca=q.answer,exp='';
     if(ua===ca)exp='回答正确！正确答案是 '+ca+'。';
@@ -843,7 +1002,9 @@ function renderQuestion(){
     else exp='未作答。正确答案是 '+ca+'。';
     if(q.explanation)exp+=' '+q.explanation;
     document.getElementById('explanationText').textContent=exp;expArea.classList.remove('hidden');
-  }else{expArea.classList.add('hidden');}
+    aiAction.classList.toggle('hidden',!ua||ua===ca);
+    document.getElementById('copyAiText').textContent='复制给 AI 分析';
+  }else{expArea.classList.add('hidden');aiAction.classList.add('hidden');}
 
   document.getElementById('prevBtn').disabled=currentIndex===0;
   var nextBtn=document.getElementById('nextBtn');
@@ -903,7 +1064,7 @@ function renderQuestionMap(){
 // Lightweight style update on answer selection - no DOM rebuild
 function updateOptionStyles(){
   var q=examQuestions[currentIndex];
-  var opts=shuffleOptions&&shuffledOptionsCache&&shuffledOptionsCache[currentIndex]?shuffledOptionsCache[currentIndex]:q.options;
+  var opts=getOptionsForDisplay(q,currentIndex);
   var btns=document.getElementById('optionsArea').children;
   for(var i=0;i<btns.length;i++){
     var btn=btns[i];
