@@ -5,10 +5,12 @@
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+const KNOWLEDGE_MODULES = require("./knowledge-coach");
 
 // ===== 配置 =====
 const MD_DIR = path.join(__dirname, "questions");
 const OUTPUT = path.join(__dirname, "docs", "index.html");
+const COMBINED_OUTPUT = path.join(__dirname, "PMP练习题库-完整版.md");
 const PART_ORDER = { 一: 1, 二: 2, 三: 3, 四: 4 };
 
 function getQuestionFileOrder(fileName) {
@@ -68,6 +70,67 @@ function verifyReviewOptionOrder(html) {
   });
 
   console.log("Regression check: shuffled review option order passed");
+}
+
+function verifyKnowledgeCoach(parts, html) {
+  if (KNOWLEDGE_MODULES.length !== 12) {
+    throw new Error(
+      `Knowledge coach check failed: expected 12 modules, got ${KNOWLEDGE_MODULES.length}`
+    );
+  }
+
+  const partCounts = new Map(
+    parts.map((part) => [part.title, part.questions.length])
+  );
+  const moduleIds = new Set();
+  KNOWLEDGE_MODULES.forEach((module) => {
+    if (moduleIds.has(module.id)) {
+      throw new Error(
+        `Knowledge coach check failed: duplicate module id ${module.id}`
+      );
+    }
+    moduleIds.add(module.id);
+
+    const missingParts = module.parts.filter((title) => !partCounts.has(title));
+    const poolSize = module.parts.reduce(
+      (total, title) => total + (partCounts.get(title) || 0),
+      0
+    );
+    if (
+      !module.title ||
+      !module.enTitle ||
+      !module.section ||
+      !module.cnPage ||
+      !module.enPage ||
+      !module.focus ||
+      !module.trap ||
+      !module.gameExample ||
+      !Array.isArray(module.points) ||
+      module.points.length < 3 ||
+      missingParts.length ||
+      poolSize < 5
+    ) {
+      throw new Error(
+        `Knowledge coach check failed (${module.id}): missingParts=${missingParts.join(",")}, poolSize=${poolSize}`
+      );
+    }
+  });
+
+  [
+    "function showKnowledgeCoach",
+    "function getCoachModuleSummary",
+    "function startCoachQuiz",
+    "function recordCoachEvidence",
+    "function buildCoachComprehensiveQuestions",
+  ].forEach((marker) => {
+    if (!html.includes(marker)) {
+      throw new Error(`Knowledge coach check failed: missing ${marker}`);
+    }
+  });
+
+  console.log(
+    `Regression check: ${KNOWLEDGE_MODULES.length} PMBOK knowledge modules mapped to question bank`
+  );
 }
 
 // ===== 解析单个 md 文件 =====
@@ -156,6 +219,108 @@ function parseMD(filePath) {
   };
 }
 
+function buildCombinedQuestionBank(mdFiles, parts, totalQuestions) {
+  const chapters = mdFiles.map((file, index) => {
+    const source = fs
+      .readFileSync(file, "utf-8")
+      .replace(/^\uFEFF/, "")
+      .trim();
+    const answerStart = source.search(/^#\s*答案与解析\s*$/m);
+    const questionSection =
+      answerStart >= 0 ? source.slice(0, answerStart) : source;
+    const answerSection =
+      answerStart >= 0 ? source.slice(answerStart) : "";
+    const questionNumbers = Array.from(
+      questionSection.matchAll(/^(\d+)[、．.]\s*/gm),
+      (match) => Number(match[1])
+    );
+    const answerNumbers = Array.from(
+      answerSection.matchAll(
+        /^#?\s*(\d+)[、．.]\s*答案[：:.、。]*\s*[A-D]/gm
+      ),
+      (match) => Number(match[1])
+    );
+    const explanationCount = Array.from(
+      answerSection.matchAll(/^解析[：:]\s*/gm)
+    ).length;
+
+    return {
+      title: path.basename(file, ".md"),
+      questionCount: parts[index].questions.length,
+      questionNumbers,
+      answerNumbers,
+      explanationCount,
+      questions: parts[index].questions,
+      source,
+    };
+  });
+
+  chapters.forEach((chapter) => {
+    const uniqueQuestions = new Set(chapter.questionNumbers);
+    const uniqueAnswers = new Set(chapter.answerNumbers);
+    const invalidOptionCount = chapter.questions.some(
+      (question) => question.options.length !== 4
+    );
+    if (
+      chapter.questionNumbers.length !== chapter.questionCount ||
+      uniqueQuestions.size !== chapter.questionCount ||
+      chapter.answerNumbers.length !== chapter.questionCount ||
+      uniqueAnswers.size !== chapter.questionCount ||
+      chapter.explanationCount !== chapter.questionCount ||
+      invalidOptionCount
+    ) {
+      throw new Error(
+        `Combined question bank check failed (${chapter.title}): questions=${chapter.questionNumbers.length}/${uniqueQuestions.size}, answers=${chapter.answerNumbers.length}/${uniqueAnswers.size}, explanations=${chapter.explanationCount}, expected=${chapter.questionCount}`
+      );
+    }
+  });
+
+  const lines = [
+    "# PMP 练习题库完整版",
+    "",
+    `> 共 ${totalQuestions} 道题，由 ${chapters.length} 个章节合并生成。`,
+    "> 每个章节均保留题目、选项、答案和解析，章节内题号及答案字母未改动。",
+    "",
+    "## 目录",
+    "",
+    ...chapters.map(
+      (chapter, index) =>
+        `${index + 1}. ${chapter.title}（${chapter.questionCount} 题）`
+    ),
+    "",
+    "---",
+    "",
+  ];
+
+  chapters.forEach((chapter, index) => {
+    lines.push(
+      `<!-- 章节 ${index + 1}：${chapter.title} -->`,
+      "",
+      chapter.source,
+      ""
+    );
+    if (index < chapters.length - 1) {
+      lines.push("---", "");
+    }
+  });
+
+  const combined = lines.join("\n").trimEnd() + "\n";
+  chapters.forEach((chapter) => {
+    const occurrences = combined.split(chapter.source).length - 1;
+    if (occurrences !== 1) {
+      throw new Error(
+        `Combined question bank check failed (${chapter.title}): expected source once, got ${occurrences}`
+      );
+    }
+  });
+
+  fs.writeFileSync(COMBINED_OUTPUT, combined, "utf-8");
+  console.log(
+    `Combined question bank: ${totalQuestions} questions from ${chapters.length} chapters`
+  );
+  console.log("Combined output: " + COMBINED_OUTPUT);
+}
+
 // ===== 扫描目录 =====
 function buildExam() {
   const mdFiles = fs
@@ -184,10 +349,12 @@ function buildExam() {
   });
 
   console.log("Total: " + totalQuestions + " questions");
+  buildCombinedQuestionBank(mdFiles, parts, totalQuestions);
 
   // Generate HTML
   const html = generateHTML(parts, totalQuestions);
   verifyReviewOptionOrder(html);
+  verifyKnowledgeCoach(parts, html);
   fs.writeFileSync(OUTPUT, html, "utf-8");
   console.log("Output: " + OUTPUT);
 }
@@ -195,6 +362,7 @@ function buildExam() {
 // ===== 生成 HTML =====
 function generateHTML(parts, totalCount) {
   const questionsJSON = JSON.stringify(parts);
+  const knowledgeJSON = JSON.stringify(KNOWLEDGE_MODULES);
   const bankVersion = require("crypto")
     .createHash("sha256")
     .update(questionsJSON)
@@ -264,6 +432,26 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
       约 <span id="timeEstimate">90</span> 分钟
     </span>
   </div>
+
+  <button id="coachEntry" type="button" onclick="showKnowledgeCoach()" class="w-full mb-4 md:mb-6 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 p-3 text-left hover:border-primary/40 hover:shadow-md transition-all cursor-pointer">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shrink-0 shadow-md shadow-primary/20">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-sm font-bold text-ink">PMBOK 知识速通</span>
+          <span class="text-[10px] font-bold text-violet-700 bg-white/80 rounded-full px-2 py-0.5">9 月冲刺</span>
+        </div>
+        <p class="text-xs text-ink-muted mt-0.5">12 个知识单元，过要点后直接快测</p>
+      </div>
+      <div class="shrink-0 text-right">
+        <p id="coachEntryProgress" class="text-xs font-bold text-primary">0 / 12</p>
+        <p class="text-[10px] text-ink-muted mt-0.5">已掌握</p>
+      </div>
+      <svg class="w-4 h-4 text-primary-light shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </button>
 
   <!-- Bank and scope selector -->
   <div class="mb-4 md:mb-6 text-left">
@@ -370,6 +558,60 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 </div>
 </div>
 
+<!-- ========== KNOWLEDGE COACH SCREEN ========== -->
+<div id="knowledgeScreen" class="hidden min-h-screen">
+<header class="sticky top-0 z-50 bg-surface-card/95 backdrop-blur-sm border-b border-primary/10 shadow-sm">
+  <div class="max-w-4xl mx-auto px-3 md:px-4 py-3 flex items-center justify-between gap-3">
+    <button type="button" onclick="hideKnowledgeCoach()" class="flex items-center gap-1 text-primary font-medium text-sm cursor-pointer hover:text-primary-dark transition-colors">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      返回
+    </button>
+    <div class="text-center min-w-0">
+      <h2 class="text-base md:text-lg font-bold text-ink truncate">PMBOK 知识速通</h2>
+      <p class="text-[10px] md:text-xs text-ink-muted">中英文第七版双语参考</p>
+    </div>
+    <span id="coachHeaderProgress" class="text-xs font-bold text-primary shrink-0">0 / 12</span>
+  </div>
+</header>
+<main class="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-8 pb-12">
+  <section class="rounded-2xl bg-gradient-to-br from-indigo-700 via-primary to-violet-600 text-white p-4 md:p-7 shadow-xl shadow-primary/20 mb-5 md:mb-7">
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div>
+        <p class="text-xs font-semibold text-indigo-100 mb-1">9 月冲刺路线</p>
+        <h1 class="text-xl md:text-2xl font-bold">先过知识点，再用题目验证</h1>
+      </div>
+      <span class="shrink-0 rounded-full bg-white/15 border border-white/20 px-2.5 py-1 text-[10px] font-semibold">约 55 分钟速过</span>
+    </div>
+    <div class="grid grid-cols-3 gap-2 mb-4">
+      <div class="rounded-xl bg-white/10 p-2.5 text-center"><p id="coachViewedCount" class="text-lg md:text-xl font-bold">0</p><p class="text-[10px] text-indigo-100">已速读</p></div>
+      <div class="rounded-xl bg-white/10 p-2.5 text-center"><p id="coachVerifiedCount" class="text-lg md:text-xl font-bold">0</p><p class="text-[10px] text-indigo-100">已验证</p></div>
+      <div class="rounded-xl bg-white/10 p-2.5 text-center"><p id="coachMasteredCount" class="text-lg md:text-xl font-bold">0</p><p class="text-[10px] text-indigo-100">已掌握</p></div>
+    </div>
+    <div class="h-1.5 rounded-full bg-white/15 overflow-hidden mb-4"><div id="coachOverallBar" class="h-full bg-emerald-300 rounded-full transition-all duration-500" style="width:0%"></div></div>
+    <div class="rounded-xl bg-white/10 border border-white/10 p-3 mb-3 flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <p class="text-[10px] text-indigo-100 mb-0.5">当前建议</p>
+        <p id="coachNextTitle" class="text-sm font-semibold truncate">价值交付系统</p>
+      </div>
+      <button type="button" onclick="openRecommendedCoachModule()" class="shrink-0 rounded-lg bg-white text-primary px-3 py-2 text-xs font-bold hover:bg-indigo-50 cursor-pointer">开始速过</button>
+    </div>
+    <button type="button" onclick="startCoachComprehensive()" class="w-full rounded-xl border border-white/25 bg-white/10 py-2.5 text-sm font-semibold hover:bg-white/15 cursor-pointer">20 题综合验证</button>
+  </section>
+
+  <div class="rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-2.5 mb-5 text-xs leading-relaxed text-ink-light">
+    知识结构以你提供的 PMBOK 第七版中英文资料为依据；练习题来自现有题库，并非 PMI 官方试题。每个单元至少完成 5 道分配给该单元的验证题后，才会判定掌握状态。
+  </div>
+
+  <div class="flex items-end justify-between gap-3 mb-3">
+    <div>
+      <h3 class="text-lg font-bold text-ink">12 个知识单元</h3>
+      <p class="text-xs text-ink-muted mt-0.5">点开速读，随后做 5 题快测或 10 题巩固</p>
+    </div>
+  </div>
+  <div id="coachModuleList" class="space-y-3"></div>
+</main>
+</div>
+
 <!-- ========== EXAM SCREEN ========== -->
 <div id="examScreen" class="hidden min-h-screen">
 <header class="sticky top-0 z-50 bg-surface-card/95 backdrop-blur-sm border-b border-primary/10 shadow-sm">
@@ -474,7 +716,7 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
   </div>
   <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
     <button onclick="reviewExam()" class="flex-1 bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer shadow-lg shadow-primary/25">查看解析</button>
-    <button onclick="restartExam()" class="flex-1 border-2 border-primary text-primary font-semibold py-3 rounded-xl hover:bg-primary/5 transition-colors cursor-pointer">重新考试</button>
+    <button id="resultReturnBtn" onclick="restartExam()" class="flex-1 border-2 border-primary text-primary font-semibold py-3 rounded-xl hover:bg-primary/5 transition-colors cursor-pointer">重新考试</button>
   </div>
 </div>
 </div>
@@ -546,6 +788,7 @@ tailwind.config={theme:{extend:{colors:{primary:'#4F46E5','primary-light':'#818C
 <script>
 // Exam data - generated from md files
 var EXAM_PARTS = ${questionsJSON};
+var KNOWLEDGE_MODULES = ${knowledgeJSON};
 var QUESTION_BANK_VERSION = '${bankVersion}';
 
 // State
@@ -554,6 +797,7 @@ var selectedScopeType='all', selectedMajorKey=null, selectedPartIndex=null;
 var userAnswers={}, questionTimers={}, lastQuestionTime=0, markedQuestions=new Set(), timerInterval=null, timeLeft=0, startTime=null;
 var examFinished=false, reviewMode=false, shuffledOptionsCache=null, frozenTimers=null, timedQuestionIndex=-1;
 var examMode='normal', examLabel='', progressSaveInterval=null;
+var coachModuleId=null, activeCoachModuleId=null;
 
 // ===== Saved Exam Progress =====
 var PROGRESS_KEY='pmp_exam_progress_v1';
@@ -576,6 +820,7 @@ function clearSavedExam(refreshHome){
 function getModeLabel(mode){
   if(mode==='drill')return '\u9519\u9898\u4e13\u9879';
   if(mode==='mix')return '\u6df7\u5408\u7ec3\u4e60';
+  if(mode==='coach')return '\u77e5\u8bc6\u5feb\u6d4b';
   return '\u666e\u901a\u7ec3\u4e60';
 }
 function saveExamProgress(){
@@ -595,7 +840,8 @@ function saveExamProgress(){
     shuffleOptions:shuffleOptions,
     shuffledOptionsCache:shuffledOptionsCache,
     examMode:examMode,
-    examLabel:examLabel
+    examLabel:examLabel,
+    coachModuleId:coachModuleId
   };
   try{localStorage.setItem(PROGRESS_KEY,JSON.stringify(snapshot));}catch(e){}
   startQuestionTimer();
@@ -645,12 +891,14 @@ function resumeSavedExam(){
   shuffledOptionsCache=saved.shuffledOptionsCache||null;
   examMode=saved.examMode||'normal';
   examLabel=saved.examLabel||'';
+  coachModuleId=saved.coachModuleId||null;
   startTime=Date.now()-(saved.elapsedMs||0);
   lastQuestionTime=0;timedQuestionIndex=-1;frozenTimers=null;
   document.getElementById('shuffleToggle').checked=shuffleOptions;
   document.getElementById('totalNum').textContent=examQuestions.length;
   document.getElementById('resumeScreen').classList.add('hidden');
   document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('knowledgeScreen').classList.add('hidden');
   document.getElementById('examScreen').classList.remove('hidden');
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('mistakeBookScreen').classList.add('hidden');
@@ -923,7 +1171,7 @@ function shuffleArray(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Mat
 
 function startExam(){
   if(!confirmReplaceSavedExam())return;
-  examMode='normal';examLabel='';
+  examMode='normal';examLabel='';coachModuleId=null;
   examFinished=false;reviewMode=false;currentIndex=0;userAnswers={};markedQuestions=new Set();shuffledOptionsCache=null;frozenTimers=null;
   var pool=getSelectedScopeQuestions();
   pool=shuffleArray(pool);
@@ -934,6 +1182,7 @@ function startExam(){
   timeLeft=Math.max(10,Math.ceil(examQuestions.length*1.5))*60;
   startTime=Date.now();
   document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('knowledgeScreen').classList.add('hidden');
   document.getElementById('examScreen').classList.remove('hidden');
   document.getElementById('resultScreen').classList.add('hidden');
   var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');
@@ -956,7 +1205,8 @@ function renderQuestion(){
   var q=examQuestions[currentIndex];
   var opts=getOptionsForDisplay(q,currentIndex);
   document.getElementById('currentNum').textContent=currentIndex+1;
-  document.getElementById('partLabel').textContent=q._partTitle||'';
+  var sourceLabel=q._partTitle||'';
+  document.getElementById('partLabel').textContent=examLabel?(examLabel+(sourceLabel?' · '+sourceLabel:'')):sourceLabel;
   renderQuestionHistory(q);
   document.getElementById('questionText').textContent=(currentIndex+1)+'、'+q.text;
   document.getElementById('questionArea').classList.add('fade-in');
@@ -1115,6 +1365,8 @@ function submitExam(){
   document.getElementById('correctCount').textContent=c;
   document.getElementById('wrongCount').textContent=w;
   document.getElementById('unansweredCount').textContent=u;
+  var resultReturnBtn=document.getElementById('resultReturnBtn');
+  if(resultReturnBtn)resultReturnBtn.textContent=examMode==='coach'?'返回知识速通':'重新考试';
   document.getElementById('timeUsed').textContent=em+'\u5206'+es+'\u79d2';
   var circ=326.73;
   var sc=document.getElementById('scoreCircle');sc.style.strokeDashoffset=circ-(pct/100)*circ;
@@ -1123,6 +1375,7 @@ function submitExam(){
   document.getElementById('examScreen').classList.add('hidden');
   document.getElementById('startScreen').classList.add('hidden');
   document.getElementById('resumeScreen').classList.add('hidden');
+  document.getElementById('knowledgeScreen').classList.add('hidden');
   document.getElementById('mistakeBookScreen').classList.add('hidden');
   document.getElementById('resultScreen').classList.remove('hidden');
   document.getElementById('resultScreen').scrollIntoView({behavior:'smooth'});
@@ -1154,9 +1407,10 @@ function submitExam(){
   });
   updateStartScreenMistakes();
   updateStudyProgress();
+  updateCoachEntry();
 }
-function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.add('hidden');document.getElementById('resumeScreen').classList.add('hidden');document.getElementById('mistakeBookScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();var tr=document.getElementById('timeRankList');if(tr){tr.classList.remove('hidden');renderTimeRank('timeRankList');}}
-function restartExam(){document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.remove('hidden');var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');updateResumeCard();}
+function reviewExam(){reviewMode=true;currentIndex=0;document.getElementById('resultScreen').classList.add('hidden');document.getElementById('startScreen').classList.add('hidden');document.getElementById('resumeScreen').classList.add('hidden');document.getElementById('knowledgeScreen').classList.add('hidden');document.getElementById('mistakeBookScreen').classList.add('hidden');document.getElementById('examScreen').classList.remove('hidden');renderQuestion();renderQuestionMap();var tr=document.getElementById('timeRankList');if(tr){tr.classList.remove('hidden');renderTimeRank('timeRankList');}}
+function restartExam(){document.getElementById('resultScreen').classList.add('hidden');var tr=document.getElementById('timeRankList');if(tr)tr.classList.add('hidden');if(examMode==='coach'){showKnowledgeCoach(coachModuleId);return;}document.getElementById('knowledgeScreen').classList.add('hidden');document.getElementById('startScreen').classList.remove('hidden');updateResumeCard();}
 
 // ===== Study Stats & Mistake Bank (localStorage) =====
 var MISTAKE_KEY='pmp_mistake_bank';
@@ -1256,8 +1510,10 @@ function getScopedMistakeRecords(){
 function clearMistakeBank(){
   localStorage.removeItem(STUDY_STATS_KEY);
   localStorage.removeItem(MISTAKE_KEY);
+  localStorage.removeItem(COACH_PROGRESS_KEY);
   updateStudyProgress();
   updateStartScreenMistakes();
+  updateCoachEntry();
 }
 function getMistakeCount(){return getScopedMistakeRecords().length;}
 function isWeakRecord(record){
@@ -1314,9 +1570,10 @@ function recordExamResults(){
     stats[key]=record;
   });
   saveStudyStats(stats);
+  recordCoachEvidence();
 }
-function summarizeStudyProgress(pool){
-  var stats=getStudyStats();
+function summarizeStudyProgress(pool,stats){
+  stats=stats||getStudyStats();
   var summary={total:pool.length,studied:0,weak:0,correct:0,wrong:0,attempts:0};
   pool.forEach(function(q){
     var record=getStudyRecord(q,stats);
@@ -1347,6 +1604,192 @@ function updateStudyProgress(){
   if(percent)percent.textContent=pctLabel;
   var text=document.getElementById('studyProgressText');
   if(text)text.textContent='已练 '+summary.studied+' / '+summary.total+' 题 · 薄弱 '+summary.weak+' · 正确率 '+(accuracy===null?'--':accuracy+'%');
+}
+
+// ===== PMBOK Knowledge Coach =====
+var COACH_PROGRESS_KEY='pmp_knowledge_coach_v1';
+function getCoachProgressState(){
+  try{
+    var raw=localStorage.getItem(COACH_PROGRESS_KEY);
+    var parsed=raw?JSON.parse(raw):null;
+    if(parsed&&parsed.viewed){
+      return {version:2,viewed:parsed.viewed,evidence:parsed.evidence&&typeof parsed.evidence==='object'?parsed.evidence:{}};
+    }
+  }catch(e){}
+  return {version:2,viewed:{},evidence:{}};
+}
+function saveCoachProgressState(state){try{localStorage.setItem(COACH_PROGRESS_KEY,JSON.stringify(state));}catch(e){}}
+function getCoachModuleById(id){
+  for(var i=0;i<KNOWLEDGE_MODULES.length;i++){if(KNOWLEDGE_MODULES[i].id===id)return KNOWLEDGE_MODULES[i];}
+  return null;
+}
+function recordCoachEvidence(){
+  if(examMode!=='coach')return;
+  var state=getCoachProgressState(),changed=false;
+  examQuestions.forEach(function(q,i){
+    if(userAnswers[i]===undefined)return;
+    var moduleId=coachModuleId||q._coachModuleId;
+    if(!moduleId||!getCoachModuleById(moduleId))return;
+    if(!state.evidence[moduleId])state.evidence[moduleId]={};
+    state.evidence[moduleId][getQuestionKey(q)]=true;
+    changed=true;
+  });
+  if(changed)saveCoachProgressState(state);
+}
+function getAllExamQuestions(){
+  var pool=[];EXAM_PARTS.forEach(function(part){pool=pool.concat(part.questions);});return pool;
+}
+function getCoachModulePool(module){
+  if(!module)return[];
+  var titles={};module.parts.forEach(function(title){titles[title]=true;});
+  var pool=[];EXAM_PARTS.forEach(function(part){if(titles[part.title])pool=pool.concat(part.questions);});
+  return pool;
+}
+function getCoachModuleSummary(module,stats,state){
+  var pool=getCoachModulePool(module);
+  state=state||getCoachProgressState();
+  var evidence=state.evidence[module.id]||{};
+  var verifiedPool=pool.filter(function(q){return !!evidence[getQuestionKey(q)];});
+  var summary=summarizeStudyProgress(verifiedPool,stats);
+  var accuracy=summary.attempts?Math.round(summary.correct/summary.attempts*100):null;
+  var coverage=Math.min(1,summary.studied/5);
+  var score=accuracy===null?0:Math.round(accuracy*coverage);
+  var weakRate=summary.studied?summary.weak/summary.studied:0;
+  var verified=summary.studied>=5;
+  var mastered=verified&&accuracy>=80&&weakRate<=0.25;
+  var status='待验证';
+  if(summary.studied>0&&!verified)status='验证中';
+  else if(mastered)status='已掌握';
+  else if(verified&&accuracy>=60)status='需巩固';
+  else if(verified)status='薄弱';
+  return {module:module,poolSize:pool.length,studied:summary.studied,weak:summary.weak,attempts:summary.attempts,accuracy:accuracy,score:score,verified:verified,mastered:mastered,status:status};
+}
+function getCoachOverview(){
+  var stats=getStudyStats(),state=getCoachProgressState();
+  var summaries=KNOWLEDGE_MODULES.map(function(module){return getCoachModuleSummary(module,stats,state);});
+  var viewed=KNOWLEDGE_MODULES.filter(function(module){return !!state.viewed[module.id];}).length;
+  var verified=summaries.filter(function(item){return item.verified;}).length;
+  var mastered=summaries.filter(function(item){return item.mastered;}).length;
+  var recommended=summaries.find(function(item){return item.status==='薄弱';})||summaries.find(function(item){return item.status==='需巩固';})||summaries.find(function(item){return !state.viewed[item.module.id];})||summaries.find(function(item){return !item.mastered;})||summaries[0];
+  return {state:state,summaries:summaries,viewed:viewed,verified:verified,mastered:mastered,recommended:recommended};
+}
+function getCoachStatusClasses(status){
+  if(status==='已掌握')return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  if(status==='需巩固')return 'bg-amber-100 text-amber-700 border-amber-200';
+  if(status==='薄弱')return 'bg-red-100 text-red-700 border-red-200';
+  if(status==='验证中')return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+  return 'bg-gray-100 text-ink-muted border-gray-200';
+}
+function updateCoachEntry(){
+  var entry=document.getElementById('coachEntryProgress');if(!entry)return;
+  var overview=getCoachOverview();
+  entry.textContent=overview.mastered+' / '+KNOWLEDGE_MODULES.length;
+  var header=document.getElementById('coachHeaderProgress');if(header)header.textContent=overview.mastered+' / '+KNOWLEDGE_MODULES.length;
+}
+function markCoachModuleViewed(id){
+  var state=getCoachProgressState();state.viewed[id]=Date.now();saveCoachProgressState(state);
+}
+function renderKnowledgeCoach(){
+  var container=document.getElementById('coachModuleList');if(!container)return;
+  var overview=getCoachOverview();
+  document.getElementById('coachViewedCount').textContent=overview.viewed;
+  document.getElementById('coachVerifiedCount').textContent=overview.verified;
+  document.getElementById('coachMasteredCount').textContent=overview.mastered;
+  document.getElementById('coachHeaderProgress').textContent=overview.mastered+' / '+KNOWLEDGE_MODULES.length;
+  document.getElementById('coachOverallBar').style.width=(overview.mastered/KNOWLEDGE_MODULES.length*100)+'%';
+  document.getElementById('coachNextTitle').textContent=overview.mastered===KNOWLEDGE_MODULES.length?'12 个单元已全部掌握':overview.recommended.module.title;
+  updateCoachEntry();
+
+  var html='',currentCategory='';
+  overview.summaries.forEach(function(item,index){
+    var module=item.module,open=activeCoachModuleId===module.id;
+    if(module.category!==currentCategory){
+      currentCategory=module.category;
+      html+='<p class="text-xs font-bold text-primary-light uppercase tracking-wider pt-2 first:pt-0">'+escapeHtml(currentCategory)+'</p>';
+    }
+    var accuracyLabel=item.accuracy===null?'--':item.accuracy+'%';
+    html+='<section id="coach-module-'+escapeHtml(module.id)+'" class="rounded-2xl border '+(open?'border-primary/30 shadow-lg shadow-primary/10':'border-gray-200 shadow-sm')+' bg-white overflow-hidden">';
+    html+='<button type="button" data-coach-toggle="'+escapeHtml(module.id)+'" class="w-full p-3.5 md:p-4 text-left cursor-pointer hover:bg-primary/[0.03] transition-colors" aria-expanded="'+(open?'true':'false')+'">';
+    html+='<div class="flex items-start gap-3"><span class="w-8 h-8 rounded-lg bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">'+String(index+1).padStart(2,'0')+'</span><div class="min-w-0 flex-1"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><h4 class="text-sm md:text-base font-bold text-ink">'+escapeHtml(module.title)+'</h4><p class="text-[10px] md:text-xs text-ink-muted mt-0.5 truncate">'+escapeHtml(module.enTitle)+'</p></div><span class="shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold '+getCoachStatusClasses(item.status)+'">'+item.status+'</span></div><p class="text-xs text-ink-light mt-2 leading-relaxed">'+escapeHtml(module.focus)+'</p><div class="flex items-center gap-2 mt-2 text-[10px] text-ink-muted"><span>已测 '+item.studied+' 题</span><span>·</span><span>正确率 '+accuracyLabel+'</span><span>·</span><span>约 '+module.minutes+' 分钟</span></div><div class="h-1 rounded-full bg-gray-100 overflow-hidden mt-2"><div class="h-full rounded-full '+(item.mastered?'bg-emerald-500':item.status==='薄弱'?'bg-red-400':'bg-primary-light')+'" style="width:'+item.score+'%"></div></div></div><span class="text-primary-light shrink-0 mt-1">'+(open?'−':'＋')+'</span></div></button>';
+    if(open){
+      html+='<div class="border-t border-primary/10 p-3.5 md:p-5 bg-primary/[0.025]">';
+      html+='<div class="grid md:grid-cols-2 gap-3 md:gap-4">';
+      html+='<div class="rounded-xl bg-white border border-gray-100 p-3.5"><p class="text-xs font-bold text-ink mb-2">快速记住</p><ul class="space-y-2">'+module.points.map(function(point){return '<li class="flex gap-2 text-xs leading-relaxed text-ink-light"><span class="text-primary font-bold">·</span><span>'+escapeHtml(point)+'</span></li>';}).join('')+'</ul></div>';
+      html+='<div class="space-y-3"><div class="rounded-xl bg-amber-50 border border-amber-100 p-3.5"><p class="text-xs font-bold text-amber-800 mb-1">易混差异</p><p class="text-xs leading-relaxed text-amber-800/80">'+escapeHtml(module.trap)+'</p></div><div class="rounded-xl bg-violet-50 border border-violet-100 p-3.5"><p class="text-xs font-bold text-violet-800 mb-1">游戏开发案例</p><p class="text-xs leading-relaxed text-violet-800/80">'+escapeHtml(module.gameExample)+'</p></div></div>';
+      html+='</div>';
+      html+='<div class="mt-3 rounded-xl bg-white border border-indigo-100 p-3"><p class="text-[10px] font-bold text-ink-muted mb-2">标准参考 · '+escapeHtml(module.section)+'</p><div class="flex flex-wrap gap-2"><span class="rounded-lg bg-red-50 text-red-700 px-2.5 py-1 text-[10px] font-semibold">PMBOK 7 '+escapeHtml(module.cnPage)+'</span><span class="rounded-lg bg-blue-50 text-blue-700 px-2.5 py-1 text-[10px] font-semibold">PMBOK 7 '+escapeHtml(module.enPage)+'</span><span class="rounded-lg bg-gray-50 text-ink-muted px-2.5 py-1 text-[10px]">对应题库 '+item.poolSize+' 题</span></div></div>';
+      html+='<div class="grid grid-cols-2 gap-2 mt-3"><button type="button" data-coach-quiz="'+escapeHtml(module.id)+'" data-count="5" class="rounded-xl bg-primary text-white py-2.5 text-xs md:text-sm font-bold hover:bg-primary-dark cursor-pointer shadow-md shadow-primary/20">5 题快测</button><button type="button" data-coach-quiz="'+escapeHtml(module.id)+'" data-count="10" class="rounded-xl border border-primary/20 bg-white text-primary py-2.5 text-xs md:text-sm font-bold hover:bg-primary/5 cursor-pointer">10 题巩固</button></div>';
+      html+='</div>';
+    }
+    html+='</section>';
+  });
+  container.innerHTML=html;
+  container.querySelectorAll('[data-coach-toggle]').forEach(function(button){button.addEventListener('click',function(){toggleCoachModule(this.dataset.coachToggle);});});
+  container.querySelectorAll('[data-coach-quiz]').forEach(function(button){button.addEventListener('click',function(){startCoachQuiz(this.dataset.coachQuiz,parseInt(this.dataset.count,10));});});
+}
+function showKnowledgeCoach(preferredId){
+  ['resumeScreen','startScreen','examScreen','resultScreen','mistakeBookScreen'].forEach(function(id){document.getElementById(id).classList.add('hidden');});
+  document.getElementById('knowledgeScreen').classList.remove('hidden');
+  if(preferredId&&getCoachModuleById(preferredId))activeCoachModuleId=preferredId;
+  renderKnowledgeCoach();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function hideKnowledgeCoach(){
+  document.getElementById('knowledgeScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.remove('hidden');
+  updateCoachEntry();updateResumeCard();
+}
+function toggleCoachModule(id){
+  activeCoachModuleId=activeCoachModuleId===id?null:id;
+  if(activeCoachModuleId)markCoachModuleViewed(id);
+  renderKnowledgeCoach();
+}
+function openRecommendedCoachModule(){
+  var overview=getCoachOverview();if(!overview.recommended)return;
+  activeCoachModuleId=overview.recommended.module.id;
+  markCoachModuleViewed(activeCoachModuleId);renderKnowledgeCoach();
+  setTimeout(function(){var card=document.getElementById('coach-module-'+activeCoachModuleId);if(card)card.scrollIntoView({behavior:'smooth',block:'start'});},0);
+}
+function pickCoachQuestions(pool,count){
+  var stats=getStudyStats();
+  return weightedPickItems(pool,Math.min(count,pool.length),function(q){
+    var record=getStudyRecord(q,stats);
+    if(!record||!record.attempts)return 8;
+    if(isWeakRecord(record))return getWeakWeight(record)+4;
+    return Math.max(1,3-(record.correctStreak||0));
+  });
+}
+function tagCoachQuestions(questions,moduleId){
+  return questions.map(function(q){return Object.assign({},q,{_coachModuleId:moduleId});});
+}
+function buildCoachComprehensiveQuestions(count){
+  var summaries=getCoachOverview().summaries.slice().sort(function(a,b){return a.score-b.score;});
+  var selected=[],used={},added=true;
+  while(selected.length<count&&added){
+    added=false;
+    for(var i=0;i<summaries.length&&selected.length<count;i++){
+      var module=summaries[i].module;
+      var available=getCoachModulePool(module).filter(function(q){return !used[getQuestionKey(q)];});
+      var picked=pickCoachQuestions(available,1)[0];
+      if(!picked)continue;
+      used[getQuestionKey(picked)]=true;
+      selected.push(tagCoachQuestions([picked],module.id)[0]);
+      added=true;
+    }
+  }
+  return selected;
+}
+function startCoachQuiz(id,count){
+  var module=getCoachModuleById(id);if(!module||!confirmReplaceSavedExam())return;
+  examMode='coach';coachModuleId=id;activeCoachModuleId=id;
+  var questions=shuffleArray(tagCoachQuestions(pickCoachQuestions(getCoachModulePool(module),count),module.id));
+  startExamWithQuestions(questions,'知识快测 · '+module.title);
+}
+function startCoachComprehensive(){
+  if(!confirmReplaceSavedExam())return;
+  examMode='coach';coachModuleId=null;
+  var questions=shuffleArray(buildCoachComprehensiveQuestions(20));
+  startExamWithQuestions(questions,'PMBOK 综合验证 · 20 题');
 }
 function renderQuestionHistory(q){
   var box=document.getElementById('questionHistory');
@@ -1383,7 +1826,7 @@ function updateStartScreenMistakes(){
 
 function startDrill(){
   if(!confirmReplaceSavedExam())return;
-  examMode='drill';
+  examMode='drill';coachModuleId=null;
   var records=getScopedMistakeRecords();
   if(records.length===0)return;
   var count=selectedQCount>0?Math.min(selectedQCount,records.length):records.length;
@@ -1393,7 +1836,7 @@ function startDrill(){
 
 function startMix(){
   if(!confirmReplaceSavedExam())return;
-  examMode='mix';
+  examMode='mix';coachModuleId=null;
   var scopePool=getSelectedScopeQuestions();
   var records=getScopedMistakeRecords();
   var stats=getStudyStats();
@@ -1421,6 +1864,7 @@ function startMix(){
   timeLeft=Math.max(10,Math.ceil(examQuestions.length*1.5))*60;
   startTime=Date.now();
   document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('knowledgeScreen').classList.add('hidden');
   document.getElementById('examScreen').classList.remove('hidden');
   document.getElementById('resultScreen').classList.add('hidden');
   document.getElementById('mistakeBookScreen').classList.add('hidden');
@@ -1431,6 +1875,7 @@ function startMix(){
 
 function showMistakeBook(){
   document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('knowledgeScreen').classList.add('hidden');
   document.getElementById('mistakeBookScreen').classList.remove('hidden');
   renderMistakeBook();
 }
@@ -1468,6 +1913,7 @@ updateStartScreenMistakes();
 updateResumeCard();
 renderScopeControls();
 updateTimeEstimate();
+updateCoachEntry();
 
 var hiddenAt=0;
 document.addEventListener('visibilitychange',function(){
